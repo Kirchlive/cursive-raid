@@ -244,6 +244,8 @@ Append options after the priority, comma-separated:
 | `name=<str>` | Filter targets by name (partial match) |
 | `ignorespellid=<number>` | Skip targets with this spell ID |
 | `ignorespelltexture=<str>` | Skip targets with this spell texture |
+| `cooldown` | Check spell cooldown before casting — returns false if on CD (enables clean macro fallthrough) |
+| `harvestrefresh=<number>` | Time threshold for refreshing DoTs when Dark Harvest is off cooldown |
 
 ### Macro Examples
 
@@ -268,6 +270,12 @@ Append options after the priority, comma-separated:
 ```
 /cursive multicurse Curse of Recklessness|RAID_MARK|name=Touched Warrior,ignorespelltexture=Spell_Shadow_UnholyStrength,resistsound,expiringsound
 ```
+
+**Affliction Warlock with cooldown-aware Dark Harvest:**
+```
+/script if buffed("Shadow Trance") then cast("Shadow Bolt") elseif Cursive:Curse("Curse of Shadow","target",{refreshtime=2}) then elseif Cursive:Curse("Corruption","target",{refreshtime=2}) then elseif Cursive:Curse("Curse of Agony","target",{refreshtime=2}) then elseif Cursive:Curse("Dark Harvest","target",{cooldown=true}) then else cast("Drain Soul") end
+```
+The `cooldown` option checks the spell's actual cooldown (filtering out GCD). If the spell is on CD, the command returns `false` immediately — enabling clean fallthrough to the next action in the macro chain.
 
 ### API for Other Addons
 
