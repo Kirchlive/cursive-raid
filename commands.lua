@@ -360,6 +360,17 @@ local function passedOptionFilters(guid, options)
 	return true
 end
 
+-- Determine effective refresh time considering harvestrefresh option
+-- When Dark Harvest is off cooldown, uses the higher harvestrefresh threshold
+-- so DoTs get refreshed before DH is channeled
+local function getEffectiveRefreshTime(options)
+	local refreshTime = options["refreshtime"]
+	if options["harvestrefresh"] and isDarkHarvestReady() then
+		return options["harvestrefresh"]
+	end
+	return refreshTime
+end
+
 local function pickTarget(selectedPriority, lowercaseSpellNameNoRank, checkRange, options)
 	-- Curse the target that best matches the selected priority
 	local highestPrimaryValue = -10
@@ -515,17 +526,6 @@ local function isDarkHarvestReady()
 	if Cursive.curses.isChanneling then return false end
 	-- Check if DH spell is off cooldown
 	return not isSpellOnCooldown(L["dark harvest"])
-end
-
--- Determine effective refresh time considering harvestrefresh option
--- When Dark Harvest is off cooldown, uses the higher harvestrefresh threshold
--- so DoTs get refreshed before DH is channeled
-local function getEffectiveRefreshTime(options)
-	local refreshTime = options["refreshtime"]
-	if options["harvestrefresh"] and isDarkHarvestReady() then
-		return options["harvestrefresh"]
-	end
-	return refreshTime
 end
 
 local function castSpellWithOptions(spellName, lowercaseSpellNameNoRank, targetedGuid, options)
