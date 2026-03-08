@@ -187,6 +187,107 @@ Profiles are stored independently from AceDB in a separate `SavedVariables: Curs
 
 ---
 
+## Commands & Macros
+
+### Curse (Single Target)
+
+Cast a spell on your target (or a specific GUID) if they don't already have it:
+
+```
+/cursive curse Corruption|target
+/cursive curse Curse of Recklessness|target|refreshtime=1
+```
+
+### Multicurse (Smart Target Selection)
+
+Automatically pick the best target and cast:
+
+```
+/cursive multicurse Corruption|HIGHEST_HP
+/cursive multicurse Curse of Recklessness|RAID_MARK|warnings,resistsound,expiringsound
+```
+
+### Target (Target Without Casting)
+
+```
+/cursive target Icicles|HIGHEST_HP
+```
+
+### Priority Options
+
+| Priority | Description |
+|----------|-------------|
+| `HIGHEST_HP` | Target highest HP enemy without the debuff |
+| `LOWEST_HP` | Target lowest HP enemy without the debuff |
+| `RAID_MARK` | Target by raid mark priority (Skull > Cross > Square > ... > Star > No mark) |
+| `RAID_MARK_SQUARE` | Like RAID_MARK but ignores Skull and Cross |
+| `INVERSE_RAID_MARK` | Reverse of RAID_MARK |
+| `HIGHEST_HP_RAID_MARK` | Highest HP first, raid marks break ties |
+| `HIGHEST_HP_RAID_MARK_SQUARE` | Like above but with RAID_MARK_SQUARE priority |
+| `HIGHEST_HP_INVERSE_RAID_MARK` | Like above but with INVERSE_RAID_MARK priority |
+
+### Command Options
+
+Append options after the priority, comma-separated:
+
+| Option | Description |
+|--------|-------------|
+| `warnings` | Display text warnings when a curse fails |
+| `resistsound` | Play a sound when resisted |
+| `expiringsound` | Play a sound when about to expire |
+| `allowooc` | Allow out-of-combat targets (careful in raids!) |
+| `priotarget` | Always prioritize current target for multicurse |
+| `ignoretarget` | Ignore current target for multicurse |
+| `playeronly` | Only target players, ignore NPCs |
+| `minhp=<number>` | Minimum HP threshold |
+| `refreshtime=<number>` | Allow refresh when remaining time is below this (seconds) |
+| `name=<str>` | Filter targets by name (partial match) |
+| `ignorespellid=<number>` | Skip targets with this spell ID |
+| `ignorespelltexture=<str>` | Skip targets with this spell texture |
+
+### Macro Examples
+
+**Simple chain** (game decides order):
+```
+/cursive curse Curse of Recklessness|target|refreshtime=1
+/cursive curse Corruption|target|refreshtime=3
+/cursive curse Siphon Life|target|refreshtime=1
+```
+
+**Controlled priority chain** (Lua, guaranteed order):
+```
+/script if not Cursive:Curse("Curse of Recklessness", "target", {refreshtime=1}) then if not Cursive:Curse("Corruption", "target", {refreshtime=3}) then Cursive:Curse("Siphon Life", "target", {refreshtime=1}) end end
+```
+
+**Multicurse with full options:**
+```
+/script Cursive:Multicurse("Curse of Recklessness", "HIGHEST_HP", {warnings=1,resistsound=1,expiringsound=1,refreshtime=2})
+```
+
+**Raid mark filtering with ignore:**
+```
+/cursive multicurse Curse of Recklessness|RAID_MARK|name=Touched Warrior,ignorespelltexture=Spell_Shadow_UnholyStrength,resistsound,expiringsound
+```
+
+### API for Other Addons
+
+```lua
+-- Check if a debuff is active
+Cursive.curses:HasCurse("corruption", targetGuid, minRemaining)
+
+-- Get raw curse data
+local data = Cursive.curses:GetCurseData("Corruption", guid)
+-- Returns: { rank, duration, start, spellID, targetGuid, currentPlayer }
+
+-- Get time remaining
+local remaining = Cursive.curses:TimeRemaining(data)
+
+-- Get smart target GUID
+local guid = Cursive:GetTarget("Corruption", "HIGHEST_HP", {})
+```
+
+---
+
 ## Documentation
 
 | Document | Description |
@@ -194,6 +295,10 @@ Profiles are stored independently from AceDB in a separate `SavedVariables: Curs
 | [Debuff Tracking](docs/DEBUFF-TRACKING.md) | SharedDebuffs internals, procExpected system, armor-diff EA detection |
 | [SuperWoW API](docs/SUPERWOW-API.md) | All SuperWoW APIs used and how |
 | [Test Overlay](docs/TEST-OVERLAY.md) | Fake GUID system, API wrappers, class-specific debuff injection |
+| [Spell ID Reference](docs/FINAL-SPELL-IDS.md) | All verified spell IDs for TurtleWoW |
+| [Spell Verification](docs/spell-id-verification-turtlewow.md) | ID verification against database.turtlecraft.gg |
+| [Vanilla Lua Reference](docs/AGENTS_WoW_Vanilla_1.12_EN.md) | Complete Lua 5.0 addon development guide |
+| [v3.2 Implementation](docs/IMPLEMENTATION.md) | Shared Debuffs architecture & decisions |
 
 ---
 
