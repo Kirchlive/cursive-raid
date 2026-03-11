@@ -1984,7 +1984,7 @@ _, y = CreateRow(dispChild, "CursiveOptSpacing", y, "Health Bar Spacing", "slide
     { min = 0, max = 10, step = 1, fmt = "%d", tooltipText = "Spacing between health bars" })
 
 _, y = CreateRow(dispChild, "CursiveOptDebuffIconSpacing", y, "Debuff Icon Spacing", "slider", "debufficonspacing",
-    { min = 0, max = 5, step = 1, fmt = "%d", tooltipText = "Spacing between debuff icons" })
+    { min = 0, max = 10, step = 1, fmt = "%d", tooltipText = "Spacing between debuff icons" })
 
 -- Header: Sizes
 _, y = CreateRow(dispChild, "CursiveDispHdrSizes", y, "Sizes", "header", nil, { headerIndent = SLIDER_X_OFFSET })
@@ -2042,6 +2042,12 @@ _, y = CreateRow(dispChild, "CursiveOptStackH", y, "Stack Horizontal", "slider",
 
 _, y = CreateRow(dispChild, "CursiveOptStackV", y, "Stack Vertical", "slider", "cursestackv",
     { min = 0, max = 10, step = 1, fmt = "%d", tooltipText = "Vertical position of stack counter (0=bottom, 5=center, 10=top)" })
+
+-- Header: Target Armor
+_, y = CreateRow(dispChild, "CursiveDispHdrTargetArmor", y, "Target Armor", "header", nil, { headerIndent = SLIDER_X_OFFSET })
+
+_, y = CreateRow(dispChild, "CursiveOptArmorPositionOffset", y, "Position", "slider", "armorPositionOffset",
+    { min = -30, max = 30, step = 1, fmt = "%d", tooltipText = "Vertical offset for Target Armor display (0 = centered)" })
 
 dispChild:SetHeight((-y) + 20)
 
@@ -2943,6 +2949,9 @@ function CursiveOpts.Initialize()
     CursiveOpts.SetSlider("CursiveOptStackSize", p.cursestacksize or 10, "%d", "Stack Size")
     CursiveOpts.SetSlider("CursiveOptStackH", p.cursestackh or 9, "%d", "Stack Horizontal")
     CursiveOpts.SetSlider("CursiveOptStackV", p.cursestackv or 1, "%d", "Stack Vertical")
+
+    -- Display tab: Target Armor
+    CursiveOpts.SetSlider("CursiveOptArmorPositionOffset", p.armorPositionOffset or 0, "%d", "Position")
 
     -- Display tab checkboxes
     -- Debuff Timer dropdown refresh

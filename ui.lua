@@ -889,19 +889,20 @@ local function CreateBarFirstSection(unitFrame, guid)
 		if unitFrame.armorFrame then
 			unitFrame.armorFrame:ClearAllPoints()
 			local gap = 21  -- 3px base + 18px extra spacing
+			local yOff = config.armorPositionOffset or 0
 			if unitFrame.icon and config.showraidicons then
 				-- Raid icon visible: anchor to icon
 				if config.invertbars then
-					unitFrame.armorFrame:SetPoint("LEFT", unitFrame.icon, "RIGHT", gap, 0)
+					unitFrame.armorFrame:SetPoint("LEFT", unitFrame.icon, "RIGHT", gap, yOff)
 				else
-					unitFrame.armorFrame:SetPoint("RIGHT", unitFrame.icon, "LEFT", -gap, 0)
+					unitFrame.armorFrame:SetPoint("RIGHT", unitFrame.icon, "LEFT", -gap, yOff)
 				end
 			else
 				-- No raid icon: anchor to section edge
 				if config.invertbars then
-					unitFrame.armorFrame:SetPoint("LEFT", firstSection, "LEFT", gap, 0)
+					unitFrame.armorFrame:SetPoint("LEFT", firstSection, "LEFT", gap, yOff)
 				else
-					unitFrame.armorFrame:SetPoint("RIGHT", firstSection, "RIGHT", -gap, 0)
+					unitFrame.armorFrame:SetPoint("RIGHT", firstSection, "RIGHT", -gap, yOff)
 				end
 			end
 		end
