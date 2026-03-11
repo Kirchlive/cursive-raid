@@ -3,3 +3,5 @@ tests/
 reference/
 IMPLEMENTATION_PLAN.md
 *.bak*
+*.OLD.lua
+*.bak*

@@ -1095,7 +1095,7 @@ function CursiveOptions:OnTooltipUpdate()
 	if AceLibrary:HasInstance("Tablet-2.0") then
 		local Tablet = AceLibrary("Tablet-2.0")
 		local cat = Tablet:AddCategory("columns", 1)
-		cat:AddLine("text", "Cursive Raid v4.0 |CFFFFCC00[|r|CFFCC3333SUPERWOW|r|CFFFFCC00]|r")
+		cat:AddLine("text", "Cursive Raid v4.0.1 |CFFFFCC00[|r|CFFCC3333SUPERWOW|r|CFFFFCC00]|r")
 	end
 end
 
@@ -1137,7 +1137,7 @@ mmPatch:SetScript("OnEvent", function()
 		mmPatch.patched = true
 
 		-- Set colored name after FuBar created frames
-		CursiveOptions.name = "Cursive Raid v4.0 |CFFFFCC00[|r|CFFCC3333SUPERWOW|r|CFFFFCC00]|r"
+		CursiveOptions.name = "Cursive Raid v4.0.1 |CFFFFCC00[|r|CFFCC3333SUPERWOW|r|CFFFFCC00]|r"
 
 		-- Override OnClick — only LeftButton, right-click does nothing
 		mmFrame:SetScript("OnClick", function()
