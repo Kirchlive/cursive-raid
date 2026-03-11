@@ -87,7 +87,7 @@ local GENERAL_KEYS = {
     "showunitname", "alwaysshowcurrenttarget", "coloreddecimalduration",
 }
 local DISPLAY_KEYS = {
-    "scale", "opacity", "fontscale", "maxcurses", "maxrow", "maxcol", "spacing",
+    "scale", "opacity", "fontscale", "maxcurses", "maxrow", "maxcol", "spacing", "debufficonspacing",
     "healthwidth", "height", "raidiconsize", "curseiconsize", "textsize",
     "cursetimersize", "cursetimeh", "cursetimev", "cursestacksize", "cursestackh",
     "cursestackv", "cursetimeyellow", "classcolordurationtimer", "cursestackyellow", "namelength",
@@ -105,7 +105,7 @@ local DEFAULTS = {
     showraidicons = true, showhealthbar = true, showunitname = true,
     alwaysshowcurrenttarget = false, coloreddecimalduration = false,
     scale = 1.0, opacity = 1.0, fontscale = 1.0,
-    maxcurses = 14, maxrow = 8, maxcol = 1, spacing = 3,
+    maxcurses = 14, maxrow = 8, maxcol = 1, spacing = 3, debufficonspacing = 1,
     healthwidth = 100, height = 18, raidiconsize = 18, curseiconsize = 18,
     textsize = 9, cursetimersize = 10, nameTextSize = 8,
     cursetimeh = 5, cursetimev = 5,
@@ -1980,8 +1980,11 @@ _, y = CreateRow(dispChild, "CursiveOptMaxRows", y, "Max Targets", "slider", "ma
 _, y = CreateRow(dispChild, "CursiveOptMaxCols", y, "Columns", "slider", "maxcol",
     { min = 1, max = 5, step = 1, fmt = "%d", tooltipText = "Maximum number of columns" })
 
-_, y = CreateRow(dispChild, "CursiveOptSpacing", y, "Spacing", "slider", "spacing",
-    { min = 0, max = 10, step = 1, fmt = "%d", tooltipText = "Spacing between bars" })
+_, y = CreateRow(dispChild, "CursiveOptSpacing", y, "Health Bar Spacing", "slider", "spacing",
+    { min = 0, max = 10, step = 1, fmt = "%d", tooltipText = "Spacing between health bars" })
+
+_, y = CreateRow(dispChild, "CursiveOptDebuffIconSpacing", y, "Debuff Icon Spacing", "slider", "debufficonspacing",
+    { min = 0, max = 5, step = 1, fmt = "%d", tooltipText = "Spacing between debuff icons" })
 
 -- Header: Sizes
 _, y = CreateRow(dispChild, "CursiveDispHdrSizes", y, "Sizes", "header", nil, { headerIndent = SLIDER_X_OFFSET })
@@ -2919,7 +2922,8 @@ function CursiveOpts.Initialize()
     CursiveOpts.SetSlider("CursiveOptMaxCurses", p.maxcurses, "%d", "Max Debuffs")
     CursiveOpts.SetSlider("CursiveOptMaxRows", p.maxrow, "%d", "Max Targets")
     CursiveOpts.SetSlider("CursiveOptMaxCols", p.maxcol, "%d", "Columns")
-    CursiveOpts.SetSlider("CursiveOptSpacing", p.spacing, "%d", "Spacing")
+    CursiveOpts.SetSlider("CursiveOptSpacing", p.spacing, "%d", "Health Bar Spacing")
+    CursiveOpts.SetSlider("CursiveOptDebuffIconSpacing", p.debufficonspacing or 1, "%d", "Debuff Icon Spacing")
     CursiveOpts.SetSlider("CursiveOptHealthWidth", p.healthwidth, "%d", "Health Bar Width")
     CursiveOpts.SetSlider("CursiveOptHealthHeight", p.height, "%d", "Health Bar Height")
     CursiveOpts.SetSlider("CursiveOptRaidIconSize", p.raidiconsize, "%d", "Raid Icon Size")

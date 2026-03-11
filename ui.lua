@@ -111,7 +111,7 @@ ui.background = {
 
 ui.rootBarFrame = nil
 ui.targetIndicatorSize = 8
-ui.padding = 2
+ui.padding = 1  -- default, overridden by config.debufficonspacing in UpdateFramesFromConfig
 
 ui.row = 1
 ui.col = 1
@@ -244,6 +244,9 @@ end
 ui.unitFrames = {} -- holds all unitFrames for all columns/rows
 
 Cursive.UpdateFramesFromConfig = function()
+	-- Update icon spacing from config
+	ui.padding = Cursive.db.profile.debufficonspacing or 1
+
 	for col, rows in pairs(ui.unitFrames) do
 		for row, unitFrame in pairs(rows) do
 			if unitFrame and unitFrame:IsShown() then

@@ -84,6 +84,7 @@ Cursive:RegisterDefaults("profile", {
 	curseiconsize = 18,
 	maxcurses = 14,
 	spacing = 3,
+	debufficonspacing = 1,
 
 	maxrow = 8,
 	maxcol = 1,
@@ -385,8 +386,8 @@ local barOptions = {
 	},
 	["spacing"] = {
 		type = "range",
-		name = L["Spacing"],
-		desc = L["Spacing"],
+		name = L["Health Bar Spacing"],
+		desc = L["Health Bar Spacing"],
 		order = 80,
 		min = 0,
 		max = 10,
@@ -397,6 +398,24 @@ local barOptions = {
 		set = function(v)
 			if v ~= Cursive.db.profile.spacing then
 				Cursive.db.profile.spacing = v
+				Cursive.UpdateFramesFromConfig()
+			end
+		end,
+	},
+	["debufficonspacing"] = {
+		type = "range",
+		name = L["Debuff Icon Spacing"],
+		desc = L["Debuff Icon Spacing"],
+		order = 81,
+		min = 0,
+		max = 5,
+		step = 1,
+		get = function()
+			return Cursive.db.profile.debufficonspacing
+		end,
+		set = function(v)
+			if v ~= Cursive.db.profile.debufficonspacing then
+				Cursive.db.profile.debufficonspacing = v
 				Cursive.UpdateFramesFromConfig()
 			end
 		end,
