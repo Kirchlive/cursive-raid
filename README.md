@@ -323,20 +323,27 @@ local guid = Cursive:GetTarget("Corruption", "HIGHEST_HP", {})
 Bugfixes, new features, and addon folder rename.
 
 **Fixes:**
-- 🐛 **Shadow Weaving tracking** — Fixed consecutive Mind Flay casts cancelling each other's scan events (unique scan IDs per cast)
-- 🐛 **Shadow Weaving on non-targeted mobs** — Now correctly tracks and updates stacks on all mobs, not just your current target
-- 🐛 **Multicurse broken** — Fixed `getEffectiveRefreshTime` forward declaration error (Lua 5.0 scope issue)
-- 🐛 **isDarkHarvestReady nil error** — Moved `isSpellOnCooldown` and `isDarkHarvestReady` before `getEffectiveRefreshTime` to satisfy Lua 5.0's top-down function resolution
-- 🐛 **Consecutive proc scan cancellation** — All CAST and CHANNEL trigger scan events now use unique IDs via `GetTime()` to prevent overwriting
+- **Shadow Weaving tracking** — Fixed consecutive Mind Flay casts cancelling each other's scan events (unique scan IDs per cast)
+- **Shadow Weaving on non-targeted mobs** — Now correctly tracks and updates stacks on all mobs, not just your current target
+- **Multicurse broken** — Fixed `getEffectiveRefreshTime` forward declaration error (Lua 5.0 scope issue)
+- **isDarkHarvestReady nil error** — Moved `isSpellOnCooldown` and `isDarkHarvestReady` before `getEffectiveRefreshTime` to satisfy Lua 5.0's top-down function resolution
+- **Consecutive proc scan cancellation** — All CAST and CHANNEL trigger scan events now use unique IDs via `GetTime()` to prevent overwriting
 
 **New Features:**
-- ⚙️ **Debuff Icon Spacing** — New slider (0–10, default 1) to control gap between debuff icons
-- ⚙️ **Health Bar Spacing** — Renamed from "Spacing" for clarity
-- ⚙️ **Target Armor Position** — New slider (-30 to +30) for horizontal offset of the armor display
+- **Debuff Icon Spacing** — New slider (0–10, default 1) to control gap between debuff icons
+- **Health Bar Spacing** — Renamed from "Spacing" for clarity
+- **Target Armor Position** — New slider (-30 to +30) for horizontal offset of the armor display
 
 **Changes:**
-- 📁 **Addon folder renamed** — `Cursive` → `Cursive-Raid` (TOC file now matches folder name)
-- 📋 **7 new default profiles** — Default, Pro Full, Raid Debuff Tracker, Raid Live Armor View, Spy Enemy Player, Targeted Only Own Debuffs, Track All Near Friendly Player (replaces 12 class-specific profiles)
+- **Addon folder renamed** — `Cursive` → `Cursive-Raid` (TOC file now matches folder name)
+- **7 new default profiles** (replaces 12 class-specific profiles):
+  - Default
+  - Pro Full
+  - Raid Debuff Tracker
+  - Raid Live Armor View
+  - Spy Enemy Player
+  - Targeted Only Own Debuffs
+  - Track All Near Friendly Player
 
 ### v4.0 — March 2026
 
