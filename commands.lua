@@ -360,6 +360,42 @@ local function passedOptionFilters(guid, options)
 	return true
 end
 
+local function isSpellOnCooldown(lowercaseSpellNameNoRank)
+	local slots = Cursive.curses.trackedCurseNameRanksToSpellSlots
+	if not slots then return false end
+
+	-- Find any spellbook slot matching this spell name (iterate to find highest rank)
+	local bestSlot = nil
+	for nameRank, slot in pairs(slots) do
+		if string.find(nameRank, lowercaseSpellNameNoRank, 1, true) then
+			if not bestSlot or slot > bestSlot then
+				bestSlot = slot
+			end
+		end
+	end
+
+	if not bestSlot then return false end
+
+	local start, duration, enabled = GetSpellCooldown(bestSlot, BOOKTYPE_SPELL)
+	if start and start > 0 and duration and duration > 1.5 then
+		-- On cooldown (duration > 1.5 filters out GCD)
+		return true
+	end
+
+	return false
+end
+
+-- Check if Dark Harvest is off cooldown and ready to cast
+-- Used by harvestrefresh option to dynamically increase DoT refresh threshold
+local function isDarkHarvestReady()
+	-- Only relevant for warlocks
+	if not Cursive.curses.isWarlock then return false end
+	-- If currently channeling DH, no need for early refresh
+	if Cursive.curses.isChanneling then return false end
+	-- Check if DH spell is off cooldown
+	return not isSpellOnCooldown(L["dark harvest"])
+end
+
 -- Determine effective refresh time considering harvestrefresh option
 -- When Dark Harvest is off cooldown, uses the higher harvestrefresh threshold
 -- so DoTs get refreshed before DH is channeled
@@ -488,44 +524,6 @@ local function pickTarget(selectedPriority, lowercaseSpellNameNoRank, checkRange
 	end
 
 	return targetedGuid
-end
-
--- Check if a spell is on cooldown by searching the spellbook via Cursive's tracked spell slots
--- Returns true if the spell is currently on cooldown, false if ready to cast
-local function isSpellOnCooldown(lowercaseSpellNameNoRank)
-	local slots = Cursive.curses.trackedCurseNameRanksToSpellSlots
-	if not slots then return false end
-
-	-- Find any spellbook slot matching this spell name (iterate to find highest rank)
-	local bestSlot = nil
-	for nameRank, slot in pairs(slots) do
-		if string.find(nameRank, lowercaseSpellNameNoRank, 1, true) then
-			if not bestSlot or slot > bestSlot then
-				bestSlot = slot
-			end
-		end
-	end
-
-	if not bestSlot then return false end
-
-	local start, duration, enabled = GetSpellCooldown(bestSlot, BOOKTYPE_SPELL)
-	if start and start > 0 and duration and duration > 1.5 then
-		-- On cooldown (duration > 1.5 filters out GCD)
-		return true
-	end
-
-	return false
-end
-
--- Check if Dark Harvest is off cooldown and ready to cast
--- Used by harvestrefresh option to dynamically increase DoT refresh threshold
-local function isDarkHarvestReady()
-	-- Only relevant for warlocks
-	if not Cursive.curses.isWarlock then return false end
-	-- If currently channeling DH, no need for early refresh
-	if Cursive.curses.isChanneling then return false end
-	-- Check if DH spell is off cooldown
-	return not isSpellOnCooldown(L["dark harvest"])
 end
 
 local function castSpellWithOptions(spellName, lowercaseSpellNameNoRank, targetedGuid, options)
