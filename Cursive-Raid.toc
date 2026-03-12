@@ -2,8 +2,7 @@
 ## Title: Cursive Raid v4.0.1
 ## Title-zhCN: Cursive Raid v4.0.1
 ## Author: Kirchlive, Teto
-## Notes: Raid debuff tracker with profiles, armor display, debuff order & multi-curse assist (SuperWoW required) 
-## Notes-zhCN: 团队Debuff追踪器，支持配置文件、护甲显示、Debuff排序和多诅咒辅助（需要SuperWoW）
+## Notes: Raid debuff tracker with profiles, armor display, debuff order & multi-curse assist (SuperWoW required)
 ## Version: 4.0.1
 ## SavedVariablesPerCharacter: CursiveDB
 ## SavedVariables: CursiveProfiles
