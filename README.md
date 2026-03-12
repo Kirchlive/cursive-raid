@@ -477,5 +477,5 @@ Same license as the original Cursive project. See upstream repositories for deta
 <p align="center">
   <i>Built with obsession, tested in raids, polished pixel by pixel.</i><br>
   <b>Kirchlive & Teto — 2026</b> 💠<br><br>
-  <i>Thanks to our guildmates for the raid testing, feedback, and patience. This one's for you.</i> 🐉
+  <i>Thanks to our guildmates for the raid testing, feedback, and patience. This one's for you.</i> 🐢
 </p>
