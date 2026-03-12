@@ -656,7 +656,7 @@ title:SetText("Cursive Raid")
 local versionText = titleFrame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 versionText:SetPoint("BOTTOMLEFT", title, "BOTTOMRIGHT", 3, 1)
 versionText:SetFont(STANDARD_TEXT_FONT, 8, "")
-versionText:SetText("v4.0.1")
+versionText:SetText("v4.0.2")
 versionText:SetTextColor(1, 1, 1)
 
 -- Close button (scaled to fit title bar, 1px from edges)

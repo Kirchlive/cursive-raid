@@ -1,4 +1,4 @@
--- defaultProfiles.lua — Built-in Default Profiles for Cursive Raid v4.0.1
+-- defaultProfiles.lua — Built-in Default Profiles for Cursive Raid v4.0.2
 -- Loaded once on first run (no saved profiles exist yet).
 -- Full profile tables from live SavedVariables.
 -- Lua 5.0 compatible.

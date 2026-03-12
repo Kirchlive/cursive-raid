@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/WoW-1.12%20Vanilla-blue?style=flat-square" alt="WoW 1.12">
   <img src="https://img.shields.io/badge/TurtleWoW-Compatible-green?style=flat-square" alt="TurtleWoW">
   <img src="https://img.shields.io/badge/SuperWoW-Required-orange?style=flat-square" alt="SuperWoW">
-  <img src="https://img.shields.io/badge/Version-4.0.1-brightgreen?style=flat-square" alt="v4.0.1">
+  <img src="https://img.shields.io/badge/Version-4.0.2-brightgreen?style=flat-square" alt="v4.0.2">
   <img src="https://img.shields.io/badge/Lua-5.0-purple?style=flat-square" alt="Lua 5.0">
 </p>
 
