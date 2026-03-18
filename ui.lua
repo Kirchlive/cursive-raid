@@ -1817,6 +1817,14 @@ local function DisplayGuid(guid)
 	end
 
 	unitFrame:Show()
+
+	-- v3.2.2: Transparent display for CC'd / Spell Reflect targets
+	if Cursive.db.profile.cctransparency and (Cursive.curses:HasActiveCC(guid) or Cursive.curses:HasSpellReflect(guid)) then
+		unitFrame:SetAlpha(0.35)
+	else
+		unitFrame:SetAlpha(1.0)
+	end
+
 	ui.numDisplayed = ui.numDisplayed + 1
 
 	local config = Cursive.db.profile

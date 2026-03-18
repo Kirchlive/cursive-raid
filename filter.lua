@@ -111,6 +111,13 @@ function Cursive:ShouldDisplayGuid(guid)
 		return false
 	end
 
+	-- v3.2.2: Never display mind-controlled players
+	-- MC'd players are UnitIsPlayer=true but UnitCanAttack=true (hostile)
+	-- Must be checked before priority shortcuts (target/raidmark) that bypass filters
+	if UnitIsPlayer(guid) and UnitCanAttack("player", guid) then
+		return false
+	end
+
 	local _, targetGuid = UnitExists("target")
 
 	-- FILTER TARGET: only show current target, hide everything else

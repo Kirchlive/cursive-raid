@@ -39,6 +39,7 @@ Cursive:RegisterDefaults("profile", {
 		spellvulnerability = true,
 		thunderfury = true,
 		puncturearmor = true,
+		potentvenom = false,
 		giftofarthas = false,
 		-- Class Utility (off by default)
 		demoroar = false,
@@ -662,7 +663,7 @@ local classDebuffs = {
 	rogue = { "exposearmor", "woundpoison", "sap" },
 	warlock = { "curseofrecklessness", "curseoftheelements", "curseofshadow", "curseoftongues", "curseofweakness", "shadowvulnerability", "banish", "enslavedemon", "fear", "howlofterror", "seduction" },
 	warrior = { "sunderarmor", "demoshout", "thunderclap", "mortalstrike", "intimidatingshout" },
-	item = { "armorshatter", "puncturearmor", "spellvulnerability", "thunderfury", "giftofarthas" },
+	item = { "armorshatter", "puncturearmor", "spellvulnerability", "thunderfury", "giftofarthas", "potentvenom" },
 }
 
 -- v3.2: Display names for debuff keys
@@ -685,6 +686,7 @@ local debuffDisplayNames = {
 	thunderfury = "Thunderfury |cFF808080(Thunderfury)|r",
 	giftofarthas = "Gift of Arthas",
 	puncturearmor = "Puncture Armor |cFF808080(Weapon Proc)|r",
+	potentvenom = "Potent Venom |cFF808080(Vial of Potent Venoms)|r",
 	demoshout = "Demoralizing Shout",
 	demoroar = "Demoralizing Roar",
 	thunderclap = "Thunder Clap",
@@ -740,6 +742,7 @@ local raidDisplayNames = {
 	woundpoison = "Wound Poison |cFFFFF468(Rogue)|r",
 	huntersmark = "Hunter's Mark |cFFAAD372(Hunter)|r",
 	giftofarthas = "Gift of Arthas |cFFFFFFFF(Item)|r",
+	potentvenom = "Potent Venom |cFFFFFFFF(Vial of Potent Venoms)|r",
 }
 
 -- v3.2: Detailed tooltip descriptions for each debuff
@@ -764,6 +767,7 @@ local debuffDescriptions = {
 	thunderfury = "12s\nReduces Nature Resistances by 25 and Slowing Attack Speed by 20%",
 	puncturearmor = "30s\nReduces Armor by 200 up to 3 Times (600)",
 	giftofarthas = "180s\nAttackers have 3% chance to deal 200 Shadow damage over 4 ticks",
+	potentvenom = "12s\nDeals 120 Nature damage over 12 sec (Trinket Proc)",
 	-- Warrior
 	demoshout = "30s\nReduces melee AP by 140",
 	thunderclap = "30s\nReduces attack speed by 10%",
@@ -1095,7 +1099,7 @@ function CursiveOptions:OnTooltipUpdate()
 	if AceLibrary:HasInstance("Tablet-2.0") then
 		local Tablet = AceLibrary("Tablet-2.0")
 		local cat = Tablet:AddCategory("columns", 1)
-		cat:AddLine("text", "Cursive Raid v4.0.2 |CFFFFCC00[|r|CFFCC3333SUPERWOW|r|CFFFFCC00]|r")
+		cat:AddLine("text", "Cursive Raid v4.0.3 |CFFFFCC00[|r|CFFCC3333SUPERWOW|r|CFFFFCC00]|r")
 	end
 end
 
@@ -1137,7 +1141,7 @@ mmPatch:SetScript("OnEvent", function()
 		mmPatch.patched = true
 
 		-- Set colored name after FuBar created frames
-		CursiveOptions.name = "Cursive Raid v4.0.2 |CFFFFCC00[|r|CFFCC3333SUPERWOW|r|CFFFFCC00]|r"
+		CursiveOptions.name = "Cursive Raid v4.0.3 |CFFFFCC00[|r|CFFCC3333SUPERWOW|r|CFFFFCC00]|r"
 
 		-- Override OnClick — only LeftButton, right-click does nothing
 		mmFrame:SetScript("OnClick", function()

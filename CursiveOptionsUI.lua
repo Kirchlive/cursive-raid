@@ -116,6 +116,7 @@ local DEFAULTS = {
     filtertarget = false,
     filterincombat = true, filterhostile = false, filterattackable = true,
     filterplayer = false, filternotplayer = false, filterrange = true,
+    cctransparency = true,
     filterraidmark = false, filterhascurse = false, filterignored = false,
     ignorelistuseregex = false,
 }
@@ -656,7 +657,7 @@ title:SetText("Cursive Raid")
 local versionText = titleFrame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 versionText:SetPoint("BOTTOMLEFT", title, "BOTTOMRIGHT", 3, 1)
 versionText:SetFont(STANDARD_TEXT_FONT, 8, "")
-versionText:SetText("v4.0.2")
+versionText:SetText("v4.0.3")
 versionText:SetTextColor(1, 1, 1)
 
 -- Close button (scaled to fit title bar, 1px from edges)
@@ -851,6 +852,9 @@ _, y = CreateRow(genChild, "CursiveOptExpandUp", y, "Reverse Bars Upwards", "che
 
 _, y = CreateRow(genChild, "CursiveOptAlwaysTarget", y, "Always Show Current Target", "checkbox", "alwaysshowcurrenttarget",
     { tooltipText = "Always show current target at bottom of mob list" })
+
+_, y = CreateRow(genChild, "CursiveOptCCTransparency", y, "CC / Reflect Transparency", "checkbox", "cctransparency",
+    { tooltipText = "Show CC'd (banished, polymorphed) and Spell Reflect targets as transparent" })
 
 -- ============================================================
 -- Helper: CreateBorderDropdown (reusable pfUI-style dropdown)

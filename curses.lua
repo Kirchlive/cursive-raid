@@ -897,6 +897,7 @@ end
 
 -- v3.2.1: Update armor cache for a GUID (called from ui.lua OnUpdate)
 function curses:UpdateArmorCache(guid)
+	if not curses.armorCache then curses.armorCache = {} end
 	if not UnitResistance then return end
 	if IsTestGuid(guid) then
 		-- v4.0: Fake armor data for Test Overlay
@@ -933,6 +934,7 @@ end
 
 -- v3.2.1: Clean up armor cache for GUIDs we no longer track
 function curses:CleanupArmorCache()
+	if not curses.armorCache then return end
 	for guid, _ in pairs(curses.armorCache) do
 		if not curses.guids[guid] then
 			curses.armorCache[guid] = nil
@@ -1541,6 +1543,57 @@ function curses:RemoveGuid(guid)
 	-- v3.2.1: Clean up proc tracking
 	curses.procExpected[guid] = nil
 	curses.lastProcStacks[guid] = nil
+end
+
+-- v3.2.2: Known Spell Reflect buff IDs (mob buffs, not player abilities)
+-- These are buffs on mobs that reflect spells back at casters
+curses.reflectBuffIds = {
+	[22067]  = true, -- Reflection (100% All Spells, 10s) - Majordomo Adds, misc dungeon mobs
+	[20619]  = true, -- Magic Reflection (50% All Spells, 10s AoE) - MC mobs
+	[13022]  = true, -- Fire and Arcane Reflect (100% Fire+Arcane) - Anubisath (AQ)
+	[19595]  = true, -- Shadow and Frost Reflect (100% Shadow+Frost) - Anubisath (AQ)
+	[460856] = true, -- Reflect Magic (101% All Spells, 5s) - TurtleWoW Custom
+}
+
+-- v3.2.2: Check if a GUID has any active CC debuff (banish, polymorph, etc.)
+-- Returns true if at least one tracked debuff with category "cc" is active
+function curses:HasActiveCC(guid)
+	local guidCurses = curses.guids[guid]
+	if not guidCurses then return false end
+
+	for curseName, curseData in pairs(guidCurses) do
+		if curseData.spellID then
+			local debuffKey = curses.sharedDebuffSpellLookup[curseData.spellID]
+			if debuffKey then
+				local meta = curses.sharedDebuffMeta[debuffKey]
+				if meta and meta.category == "cc" then
+					-- Check if still active (not expired)
+					local remaining = curses:TimeRemaining(curseData)
+					if remaining and remaining > 0 then
+						return true
+					end
+				end
+			end
+		end
+	end
+
+	return false
+end
+
+-- v3.2.2: Check if a GUID has an active Spell Reflect buff
+-- Scans UnitBuff for known reflect spell IDs (requires SuperWoW for spellID)
+function curses:HasSpellReflect(guid)
+	if not UnitExists(guid) then return false end
+
+	for i = 1, 64 do
+		local _, _, spellID = UnitBuff(guid, i)
+		if not spellID then break end
+		if curses.reflectBuffIds[spellID] then
+			return true
+		end
+	end
+
+	return false
 end
 
 Cursive.curses = curses

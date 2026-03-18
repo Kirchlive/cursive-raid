@@ -526,6 +526,15 @@ function getSharedDebuffs()
 				[17315] = { name = L["puncture armor"], rank = 1, duration = 30 },
 			},
 		},
+		potentvenom = {
+			category = "utility",
+			class = "item",
+			raidRelevant = false,
+			isProc = true,
+			spells = {
+				[45416] = { name = L["potent venom"], rank = 1, duration = 12 },
+			},
+		},
 	}
 end
 

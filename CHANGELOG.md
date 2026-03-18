@@ -1,5 +1,43 @@
 # Changelog
 
+## v4.0.3 — 2026-03-18
+
+CC/Reflect Transparency, Mind Control fix, and new consumable debuff.
+
+### Bug Fixes
+- **Mind-Controlled players in mob list** — MC'd players appeared in the tracking list despite "Not Player" filter being active. The target/raidmark priority shortcuts in `ShouldDisplayGuid` were bypassing all filters. Fix: MC detection guard (`UnitIsPlayer + UnitCanAttack`) at the top of the filter chain, before any shortcuts.
+- **armorCache nil crash** — `CleanupArmorCache()` could crash with `bad argument to pairs (table expected, got nil)` when called before initialization. Added nil guard and lazy-init in `UpdateArmorCache`.
+
+### New Features
+- **CC / Reflect Transparency** — Targets under crowd control (Banish, Polymorph, Hibernate, Freezing Trap, Scatter Shot, Wyvern Sting, etc.) or Spell Reflect are now displayed with reduced opacity (alpha 0.35), making it visually clear that attacking them is pointless. Toggleable via "CC / Reflect Transparency" checkbox in General Settings (default: on).
+  - CC detection via existing `shared_debuffs` category system (`category = "cc"`)
+  - Spell Reflect detection via `UnitBuff` scan for known reflect buff IDs:
+    - `22067` — Reflection (Majordomo Adds, misc dungeon mobs)
+    - `20619` — Magic Reflection (Molten Core mobs)
+    - `13022` — Fire and Arcane Reflect (Anubisath, AQ)
+    - `19595` — Shadow and Frost Reflect (Anubisath, AQ)
+    - `460856` — Reflect Magic (TurtleWoW Custom)
+  - New reflect IDs can be added to `curses.reflectBuffIds` table
+- **Potent Venom tracking** — Added Vial of Potent Venoms (Spell ID 45416, 12s Nature DoT) as trackable consumable debuff. Category: Item/Utility, proc-based. Requested by community.
+
+### New Functions
+- `curses:HasActiveCC(guid)` — Checks if a GUID has any active CC debuff via shared debuff metadata
+- `curses:HasSpellReflect(guid)` — Scans UnitBuff for known Spell Reflect buff IDs (requires SuperWoW)
+
+---
+
+## v4.0.2 — 2026-03-15
+
+Minor fixes and Turtle Launcher integration.
+
+### Changes
+- **Default profiles corrected** — Fixed default profile data to match actual live SavedVariables
+- **Turtle Launcher compatibility** — TOC adjustments to trigger launcher update detection (title version bump, Notes-zhCN removal, TOC touch)
+- **Spy Enemy Player profile** — Reduced text sizes (10 → 9), README wording fix (guildmates → mates)
+- **README** — Dragon emoji replaced with turtle emoji in footer
+
+---
+
 ## v4.0.1 — 2026-03-11
 
 Bugfixes, new display features, addon rename, and updated default profiles.

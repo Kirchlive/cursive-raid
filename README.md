@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/WoW-1.12%20Vanilla-blue?style=flat-square" alt="WoW 1.12">
   <img src="https://img.shields.io/badge/TurtleWoW-Compatible-green?style=flat-square" alt="TurtleWoW">
   <img src="https://img.shields.io/badge/SuperWoW-Required-orange?style=flat-square" alt="SuperWoW">
-  <img src="https://img.shields.io/badge/Version-4.0.2-brightgreen?style=flat-square" alt="v4.0.2">
+  <img src="https://img.shields.io/badge/Version-4.0.3-brightgreen?style=flat-square" alt="v4.0.3">
   <img src="https://img.shields.io/badge/Lua-5.0-purple?style=flat-square" alt="Lua 5.0">
 </p>
 
@@ -318,7 +318,28 @@ local guid = Cursive:GetTarget("Corruption", "HIGHEST_HP", {})
 
 ## Version History
 
-### v4.0.1 — March 2026 *(current)*
+### v4.0.3 — March 2026 *(current)*
+
+CC/Reflect Transparency, Mind Control fix, new consumable debuff.
+
+**Fixes:**
+- **Mind-Controlled players** — MC'd players no longer appear in mob list despite "Not Player" filter
+- **armorCache nil crash** — Fixed `CleanupArmorCache` crash before initialization
+
+**New Features:**
+- **CC / Reflect Transparency** — CC'd (Banish, Poly, etc.) and Spell Reflect targets shown at 35% opacity. Checkbox in General Settings (default: on).
+- **Spell Reflect detection** — Scans for known reflect buff IDs (Reflection, Magic Reflection, Fire/Arcane Reflect, Shadow/Frost Reflect, TurtleWoW Reflect Magic)
+- **Potent Venom** — Vial of Potent Venoms (45416) added as trackable consumable debuff
+
+### v4.0.2 — March 2026
+
+Minor fixes and Turtle Launcher integration.
+
+- Default profiles corrected to match live SavedVariables
+- TOC adjustments for Turtle Launcher update detection
+- Spy Enemy Player text size fix, README emoji update
+
+### v4.0.1 — March 2026
 
 Bugfixes, new features, and addon folder rename.
 
