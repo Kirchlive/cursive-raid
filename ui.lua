@@ -1467,13 +1467,21 @@ local function GetSortedCurses(guidCurses, guid)
 			return ra < rb
 		end
 		-- Tertiary sort within same position group
+		-- v4.0.3: Use raw float (hundredths) for stable sorting, prevents flicker when
+		-- two debuffs have the same rounded second value. Tie-breaker: application time.
 		if ordering == L["Order applied"] then
 			return guidCurses[a].start < guidCurses[b].start
 		elseif ordering == L["Expiring latest -> soonest"] then
-			return Cursive.curses:TimeRemaining(guidCurses[a]) > Cursive.curses:TimeRemaining(guidCurses[b])
+			local ra = Cursive.curses:TimeRemainingRaw(guidCurses[a])
+			local rb = Cursive.curses:TimeRemainingRaw(guidCurses[b])
+			if ra ~= rb then return ra > rb end
+			return guidCurses[a].start < guidCurses[b].start
 		else
 			-- Default: expiring soonest first
-			return Cursive.curses:TimeRemaining(guidCurses[a]) < Cursive.curses:TimeRemaining(guidCurses[b])
+			local ra = Cursive.curses:TimeRemainingRaw(guidCurses[a])
+			local rb = Cursive.curses:TimeRemainingRaw(guidCurses[b])
+			if ra ~= rb then return ra > rb end
+			return guidCurses[a].start < guidCurses[b].start
 		end
 	end)
 
@@ -1605,14 +1613,15 @@ local function DisplayGuid(guid)
 			end
 		end
 
+		-- v4.0.3: Always use tostring() to prevent text clipping with numeric SetText
 		if remaining >= 100 then
-			curse.timer:SetText(ceil((remaining - 30) / 60) .. "m")
+			curse.timer:SetText(tostring(ceil((remaining - 30) / 60)) .. "m")
 			ApplyTimerColor()
 		elseif timerConfig.coloreddecimalduration and remaining < 5 and remaining >= 0 then
-			curse.timer:SetText(remaining)
+			curse.timer:SetText(tostring(remaining))
 			curse.timer:SetTextColor(1, 0, 0)
 		else
-			curse.timer:SetText(remaining)
+			curse.timer:SetText(tostring(remaining))
 			ApplyTimerColor()
 		end
 		curse.timer:Show()

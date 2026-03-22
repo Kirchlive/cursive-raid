@@ -370,17 +370,16 @@ function curses:GetCurseDuration(curseSpellID)
 	local baseDuration = curses.trackedCurseIds[curseSpellID].duration
 	
 	-- Eye of Dormant Corruption trinket handling
-	-- Only add +3 if tooltip shows base duration (trinket bonus not yet included)
-	-- This prevents double-counting when the server already applies the bonus
+	-- v4.0.3: Always add +3 when trinket is equipped for these spells.
+	-- The tooltip already shows haste-reduced duration (e.g. 16.8 instead of 18).
+	-- The server does NOT add the trinket bonus to the tooltip — we must always add it.
+	-- eyeExtended flag prevents premature removal when server debuff expires before addon timer.
+	curses._lastEyeExtended = false
 	if spellName == L["corruption"] or spellName == L["shadow word: pain"] then
 		curses:CheckEyeOfDormantCorruption()
 		if curses.hasEyeOfDormantCorruption then
-			-- Only add trinket bonus if duration matches base (bonus not included)
-			-- Allow small tolerance for rounding differences
-			if duration <= baseDuration + 0.5 then
-				duration = duration + 3
-			end
-			-- If duration > baseDuration, the game already applied the trinket bonus
+			duration = duration + 3
+			curses._lastEyeExtended = true
 		end
 	end
 
@@ -1276,8 +1275,18 @@ Cursive:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_OTHER", function(message)
 					if curseName == spellName then
 						-- see if target still has that curse
 						if not curses:ScanGuidForCurse(guid, curseData.spellID) then
-							-- remove curse
-							curses:RemoveCurse(guid, curseName)
+							-- v4.0.3: Eye of Dormant Corruption extends duration beyond server debuff
+							-- Don't remove if trinket bonus time is still remaining
+							local keepForTrinket = false
+							if curses.hasEyeOfDormantCorruption and curseData.eyeExtended then
+								local rawRemaining = curses:TimeRemainingRaw(curseData)
+								if rawRemaining > 0.5 then
+									keepForTrinket = true
+								end
+							end
+							if not keepForTrinket then
+								curses:RemoveCurse(guid, curseName)
+							end
 						end
 					end
 				end
@@ -1287,7 +1296,7 @@ Cursive:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_OTHER", function(message)
 end
 )
 
-function curses:TimeRemaining(curseData)
+function curses:TimeRemainingRaw(curseData)
 	local dhReduction = curseData.dhAccumulatedReduction or 0
 	
 	-- If Dark Harvest is currently active for this DoT, calculate live reduction
@@ -1297,7 +1306,11 @@ function curses:TimeRemaining(curseData)
 		dhReduction = dhReduction + (dhActiveTime * 0.4)
 	end
 	
-	local remaining = curseData.duration - (GetTime() - curseData.start) - dhReduction
+	return curseData.duration - (GetTime() - curseData.start) - dhReduction
+end
+
+function curses:TimeRemaining(curseData)
+	local remaining = curses:TimeRemainingRaw(curseData)
 	
 	local profile = Cursive.db.profile
 	if remaining >= 100 then
@@ -1499,6 +1512,7 @@ function curses:ApplyCurse(spellID, targetGuid, startTime, duration)
 		spellID = spellID,
 		targetGuid = targetGuid,
 		currentPlayer = true,
+		eyeExtended = curses._lastEyeExtended or false,
 	}
 	
 	-- If Dark Harvest is currently active on this target, start tracking for this new DoT
