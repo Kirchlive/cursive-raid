@@ -1,6 +1,16 @@
 # Changelog
 
-## v4.0.3 — 2026-03-18
+## v4.0.3 — 2026-03-22
+
+CC/Reflect Transparency, Mind Control fix, sort stability, Eye of Dormant fix.
+
+### Bug Fixes (2026-03-22)
+- **Sort flicker fix** — Debuffs with identical rounded duration no longer flicker between positions. Sorting now uses raw float (hundredths of a second) for stable ordering, with application time as tie-breaker.
+- **Eye of Dormant Corruption (55111)** — Duration extension (+3s) now always applied when trinket is equipped. Previous logic incorrectly compared haste-reduced tooltip duration against base duration, causing double-counting or missed extension. New `eyeExtended` flag prevents premature icon removal when server debuff expires before addon timer.
+- **Duration text clipping** — Timer display now uses explicit `tostring()` conversion, fixing cases where digits ("7", "6") disappeared or values were truncated ("30" shown as "3") under certain UI scale/font configurations.
+- **New: `TimeRemainingRaw()`** — Internal function returning unrounded remaining time for stable sub-second sort comparisons.
+
+### Previous (2026-03-18)
 
 CC/Reflect Transparency, Mind Control fix, and new consumable debuff.
 
