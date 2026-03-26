@@ -212,9 +212,12 @@ function getSharedDebuffs()
 			class = "priest",
 			raidRelevant = true,
 			stacks = 5,
-			isProc = true,
-			-- Talent IDs: 15257, 15331, 15332, 15333, 15334 (proc on Shadow spell hit)
-			-- Triggers: Shadow Word: Pain, Mind Blast, Mind Flay as common Shadow casts
+			-- v4.1.0: Shadow Weaving reworked in 1.18.1
+			-- Now a Priest BUFF that applies full stacks as Target DEBUFF on Shadow damage.
+			-- No longer a probabilistic proc per spell hit - stacks are instant and consistent.
+			-- isProc = false: bypasses procExpected/lastProcStacks/channel-scan logic.
+			isProc = false,
+			-- triggerSpells kept for documentation but no longer used for proc tracking
 			triggerSpells = {
 				589, 594, 970, 992, 2767, 10892, 10893, 10894, -- Shadow Word: Pain R1-R8
 				8092, 8102, 8103, 8104, 8105, 8106, 10945, 10946, 10947, -- Mind Blast R1-R9

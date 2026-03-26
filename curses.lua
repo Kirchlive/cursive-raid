@@ -48,6 +48,8 @@ local curses = {
 	darkHarvestData = {},
 	guids = {},
 	isChanneling = false,
+	-- v4.0.4: Active channel proc scan timers (cancelled on channel stop)
+	channelProcScanIDs = {},
 	pendingCast = {},
 	resistSoundGuids = {},
 	expiringSoundGuids = {},
@@ -450,7 +452,10 @@ function curses.ScanForProcDebuff(self, debuffKey, targetGuid)
 				local noTrigger = meta and (not meta.triggerSpells or table.getn(meta.triggerSpells) == 0)
 				local elapsed = GetTime() - existing.start
 				local halfDuration = (procSpellData.duration or 10) * 0.5
-				local shouldRefresh = stackChanged or isNewDebuff or noTrigger or (elapsed > halfDuration)
+				-- v4.0.4: During active channeling, be more lenient with timer refresh
+				-- Channel ticks proc debuffs repeatedly but we only get scan snapshots
+				local channelRefresh = curses.isChanneling and (elapsed > 1.0)
+				local shouldRefresh = stackChanged or isNewDebuff or noTrigger or channelRefresh or (elapsed > halfDuration)
 
 				if shouldRefresh then
 					existing.start = GetTime()
@@ -663,7 +668,10 @@ function curses:ScanTargetForSharedDebuffs(targetGuid)
 						local existing = curses.guids[targetGuid][name]
 						if existing then
 							alreadyApplied = true
-							if existing.currentPlayer == false then
+							-- v4.0.4 FIX: Proc debuffs must always go through refresh check,
+							-- even when currentPlayer == true (fixes own Shadow Weaving skipped)
+							local isProcDebuff = curses.sharedDebuffMeta[debuffKey] and curses.sharedDebuffMeta[debuffKey].isProc
+							if existing.currentPlayer == false or isProcDebuff then
 								-- Update live texture
 								existing.sharedTexture = texture
 								local meta = curses.sharedDebuffMeta[debuffKey]
@@ -892,6 +900,13 @@ end
 local function StopChanneling()
 	FinalizeDarkHarvest()
 	curses.isChanneling = false
+	-- v4.0.4: Cancel any pending channel proc scan timers
+	for _, scanID in ipairs(curses.channelProcScanIDs) do
+		if Cursive:IsEventScheduled(scanID) then
+			Cursive:CancelScheduledEvent(scanID)
+		end
+	end
+	curses.channelProcScanIDs = {}
 end
 
 -- v3.2.1: Update armor cache for a GUID (called from ui.lua OnUpdate)
@@ -996,20 +1011,34 @@ Cursive:RegisterEvent("UNIT_CASTEVENT", function(casterGuid, targetGuid, event, 
 				curses.playerOwnedCasts[targetGuid][triggerKey] = GetTime()
 			end
 
-			-- Schedule scan shortly after channel starts (Shadow Weaving procs once per cast)
-			-- Use unique event name with timestamp so consecutive Mind Flays don't cancel each other
-			local scanID = targetGuid .. triggerKey .. GetTime()
-			Cursive:ScheduleEvent(
-				"scanProc" .. scanID,
-				curses.ScanForProcDebuff, 0.5,
-				curses, triggerKey, targetGuid
-			)
-			-- Second scan as safety net (latency, server delay)
-			Cursive:ScheduleEvent(
-				"scanProc2" .. scanID,
-				curses.ScanForProcDebuff, 1.5,
-				curses, triggerKey, targetGuid
-			)
+			-- v4.0.4: Schedule periodic scans throughout the channel duration
+			-- Channel spells like Mind Flay proc Shadow Weaving on each tick,
+			-- but UNIT_CASTEVENT only fires once at channel start.
+			-- Without periodic scans, stack increases from ticks are missed.
+			for _, oldID in ipairs(curses.channelProcScanIDs) do
+				if Cursive:IsEventScheduled(oldID) then
+					Cursive:CancelScheduledEvent(oldID)
+				end
+			end
+			curses.channelProcScanIDs = {}
+
+			local scanBase = targetGuid .. triggerKey .. GetTime()
+			-- Scan at 0.5s, 1.5s, 2.5s, 3.5s (covers full channel + latency)
+			for scanIdx = 1, 4 do
+				local delay = (scanIdx - 1) * 1.0 + 0.5
+				local scanID = "scanChanProc" .. scanIdx .. scanBase
+				Cursive:ScheduleEvent(
+					scanID,
+					function()
+						if not curses.procExpected[targetGuid] then
+							curses.procExpected[targetGuid] = {}
+						end
+						curses.procExpected[targetGuid][triggerKey] = GetTime()
+						curses.ScanForProcDebuff(curses, triggerKey, targetGuid)
+					end, delay
+				)
+				table.insert(curses.channelProcScanIDs, scanID)
+			end
 		end
 	end
 
