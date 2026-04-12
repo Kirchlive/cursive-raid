@@ -257,6 +257,15 @@ function getSharedDebuffs()
 				[10888] = { name = L["psychic scream"], rank = 3, duration = 8 },
 			},
 		},
+		burningzeal = {
+			category = "spellvuln",
+			class = "priest",
+			raidRelevant = true,
+			isProc = true,
+			spells = {
+				[52980] = { name = L["burning zeal"], rank = 1, duration = 18 },
+			},
+		},
 
 		-- ============================================
 		-- ROGUE
@@ -536,6 +545,63 @@ function getSharedDebuffs()
 			isProc = true,
 			spells = {
 				[45416] = { name = L["potent venom"], rank = 1, duration = 12 },
+			},
+		},
+		-- ============================================
+		-- SCYTHE OF ELUNE (Legendary Trinket)
+		-- ============================================
+		scytheholy = {
+			category = "weaponproc",
+			class = "item",
+			raidRelevant = true,
+			isProc = true,
+			spells = {
+				[57666] = { name = L["elune's radiance"], rank = 1, duration = 10 },
+			},
+		},
+		scytheshadow = {
+			category = "weaponproc",
+			class = "item",
+			raidRelevant = true,
+			isProc = true,
+			spells = {
+				[57665] = { name = L["elune's twilight"], rank = 1, duration = 10 },
+			},
+		},
+		scythefire = {
+			category = "weaponproc",
+			class = "item",
+			raidRelevant = true,
+			isProc = true,
+			spells = {
+				[52376] = { name = L["elune's rage"], rank = 1, duration = 10 },
+			},
+		},
+		scythearcane = {
+			category = "weaponproc",
+			class = "item",
+			raidRelevant = true,
+			isProc = true,
+			spells = {
+				[57663] = { name = L["elune's wrath"], rank = 1, duration = 10 },
+			},
+		},
+		scythenature = {
+			category = "weaponproc",
+			class = "item",
+			raidRelevant = true,
+			isProc = true,
+			spells = {
+				[57664] = { name = L["elune's grace"], rank = 1, duration = 10 },
+			},
+		},
+		scythefrost = {
+			category = "weaponproc",
+			class = "item",
+			raidRelevant = true,
+			isProc = true,
+			spells = {
+				[57662] = { name = L["elune's ire"], rank = 1, duration = 10 },
 			},
 		},
 	}

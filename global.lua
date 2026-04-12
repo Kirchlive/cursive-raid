@@ -21,6 +21,33 @@ function Cursive:OnEnable()
 	-- Defaults in settings.lua are "_init" sentinel (so AceDB cleanDefaults never strips real values).
 	-- On first load (or after reset), replace sentinel with real defaults.
 	local p = Cursive.db.profile
+
+	-- v4.0.4: Type validation for critical SavedVariable fields (guards against corruption)
+	if type(p.anchor) ~= "string" or not Cursive.utils.IsValidAnchor(p.anchor) then
+		p.anchor = "RIGHT"
+	end
+	if type(p.scale) ~= "number" or p.scale <= 0 or p.scale > 5 then
+		p.scale = 1
+	end
+	if type(p.maxrow) ~= "number" or p.maxrow < 1 or p.maxrow > 40 then
+		p.maxrow = 8
+	end
+	if type(p.maxcol) ~= "number" or p.maxcol < 1 or p.maxcol > 10 then
+		p.maxcol = 1
+	end
+	if type(p.maxcurses) ~= "number" or p.maxcurses < 1 or p.maxcurses > 40 then
+		p.maxcurses = 14
+	end
+	if type(p.height) ~= "number" or p.height < 5 or p.height > 100 then
+		p.height = 20
+	end
+	if type(p.width) ~= "number" or p.width < 50 or p.width > 500 then
+		p.width = 170
+	end
+	if type(p.spacing) ~= "number" then
+		p.spacing = 2
+	end
+
 	local validCats = { ownclass = true, ownraid = true, otherclass = true, otherraid = true, none = true }
 	local mainCats = { ownclass = true, ownraid = true, otherclass = true, otherraid = true }
 	local allCats = { "ownclass", "ownraid", "otherclass", "otherraid" }
@@ -105,12 +132,14 @@ function Cursive:OnEnable()
 			"sunderarmor", "exposearmor", "faeriefire", "curseofrecklessness",
 			"firevulnerability", "winterschill", "shadowvulnerability", "shadowweaving",
 			"curseoftheelements", "curseofshadow",
-			"armorshatter", "spellvulnerability", "thunderfury",
+			"armorshatter", "puncturearmor", "spellvulnerability", "thunderfury",
+			"scytheholy", "scytheshadow", "scythefire", "scythearcane", "scythenature", "scythefrost",
 		}
 	end
 
 	DEFAULT_CHAT_FRAME:AddMessage(L["|cffffcc00Cursive:|cffffaaaa Loaded.  /cursive for commands and minimap icon for options."])
 
+	Cursive._raidOrderDirty = true -- v4.0.4: Force initial BuildRaidOrderLookup
 	Cursive.curses:LoadCurses()
 	if Cursive.db.profile.enabled then
 		Cursive.core.enable()

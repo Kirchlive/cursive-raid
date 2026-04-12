@@ -40,6 +40,12 @@ Cursive:RegisterDefaults("profile", {
 		thunderfury = true,
 		puncturearmor = true,
 		potentvenom = false,
+		scytheholy = true,
+		scytheshadow = true,
+		scythefire = true,
+		scythearcane = true,
+		scythenature = true,
+		scythefrost = true,
 		giftofarthas = false,
 		-- Class Utility (off by default)
 		demoroar = false,
@@ -57,6 +63,7 @@ Cursive:RegisterDefaults("profile", {
 		shackleundead = false,
 		mindcontrol = false,
 		psychicscream = false,
+		burningzeal = false,
 		woundpoison = false,
 		sap = false,
 		curseoftongues = false,
@@ -647,7 +654,7 @@ end
 -- v3.2: Raid Debuffs definition (13 debuffs, 3 categories)
 local raidArmorKeys = { "sunderarmor", "exposearmor", "faeriefire", "curseofrecklessness" }
 local raidSpellVulnKeys = { "firevulnerability", "winterschill", "shadowvulnerability", "shadowweaving", "curseoftheelements", "curseofshadow" }
-local raidWeaponProcKeys = { "armorshatter", "puncturearmor", "spellvulnerability", "thunderfury" }
+local raidWeaponProcKeys = { "armorshatter", "puncturearmor", "spellvulnerability", "thunderfury", "scytheholy", "scytheshadow", "scythefire", "scythearcane", "scythenature", "scythefrost" }
 local allRaidKeys = {}
 for _, k in ipairs(raidArmorKeys) do table.insert(allRaidKeys, k) end
 for _, k in ipairs(raidSpellVulnKeys) do table.insert(allRaidKeys, k) end
@@ -659,11 +666,11 @@ local classDebuffs = {
 	hunter = { "huntersmark", "freezingtrap", "scattershot", "wyvernsting" },
 	mage = { "polymorph", "firevulnerability", "winterschill", "ignite" },
 	paladin = { "judgementoflight", "judgementofwisdom", "judgementofthecrusader", "hammerofjustice" },
-	priest = { "shadowweaving", "shackleundead", "mindcontrol", "psychicscream" },
+	priest = { "shadowweaving", "shackleundead", "mindcontrol", "psychicscream", "burningzeal" },
 	rogue = { "exposearmor", "woundpoison", "sap" },
 	warlock = { "curseofrecklessness", "curseoftheelements", "curseofshadow", "curseoftongues", "curseofweakness", "shadowvulnerability", "banish", "enslavedemon", "fear", "howlofterror", "seduction" },
 	warrior = { "sunderarmor", "demoshout", "thunderclap", "mortalstrike", "intimidatingshout" },
-	item = { "armorshatter", "puncturearmor", "spellvulnerability", "thunderfury", "giftofarthas", "potentvenom" },
+	item = { "armorshatter", "puncturearmor", "spellvulnerability", "thunderfury", "giftofarthas", "potentvenom", "scytheholy", "scytheshadow", "scythefire", "scythearcane", "scythenature", "scythefrost" },
 }
 
 -- v3.2: Display names for debuff keys
@@ -687,6 +694,12 @@ local debuffDisplayNames = {
 	giftofarthas = "Gift of Arthas",
 	puncturearmor = "Puncture Armor |cFF808080(Weapon Proc)|r",
 	potentvenom = "Potent Venom |cFF808080(Vial of Potent Venoms)|r",
+	scytheholy = "Elune's Radiance |cFF808080(Holy Scythe)|r",
+	scytheshadow = "Elune's Twilight |cFF808080(Shadow Scythe)|r",
+	scythefire = "Elune's Rage |cFF808080(Fire Scythe)|r",
+	scythearcane = "Elune's Wrath |cFF808080(Arcane Scythe)|r",
+	scythenature = "Elune's Grace |cFF808080(Nature Scythe)|r",
+	scythefrost = "Elune's Ire |cFF808080(Frost Scythe)|r",
 	demoshout = "Demoralizing Shout",
 	demoroar = "Demoralizing Roar",
 	thunderclap = "Thunder Clap",
@@ -702,6 +715,7 @@ local debuffDisplayNames = {
 	shackleundead = "Shackle Undead",
 	mindcontrol = "Mind Control",
 	psychicscream = "Psychic Scream",
+	burningzeal = "Burning Zeal |cFF808080(Priest T3.5)|r",
 	sap = "Sap",
 	banish = "Banish",
 	fear = "Fear",
@@ -743,6 +757,12 @@ local raidDisplayNames = {
 	huntersmark = "Hunter's Mark |cFFAAD372(Hunter)|r",
 	giftofarthas = "Gift of Arthas |cFFFFFFFF(Item)|r",
 	potentvenom = "Potent Venom |cFFFFFFFF(Vial of Potent Venoms)|r",
+	scytheholy = "Elune's Radiance |cFFFFFFFF(Holy Scythe)|r",
+	scytheshadow = "Elune's Twilight |cFFFFFFFF(Shadow Scythe)|r",
+	scythefire = "Elune's Rage |cFFFFFFFF(Fire Scythe)|r",
+	scythearcane = "Elune's Wrath |cFFFFFFFF(Arcane Scythe)|r",
+	scythenature = "Elune's Grace |cFFFFFFFF(Nature Scythe)|r",
+	scythefrost = "Elune's Ire |cFFFFFFFF(Frost Scythe)|r",
 }
 
 -- v3.2: Detailed tooltip descriptions for each debuff
@@ -768,6 +788,12 @@ local debuffDescriptions = {
 	puncturearmor = "30s\nReduces Armor by 200 up to 3 Times (600)",
 	giftofarthas = "180s\nAttackers have 3% chance to deal 200 Shadow damage over 4 ticks",
 	potentvenom = "12s\nDeals 120 Nature damage over 12 sec (Trinket Proc)",
+	scytheholy = "10s\n+8% Holy damage taken (Scythe of Elune)",
+	scytheshadow = "10s\n+8% Shadow damage taken, -25% Healing, 100 Mana/s, 120 Shadow/s (Scythe of Elune)",
+	scythefire = "10s\n+8% Fire damage taken, +2% Spell Crit, 325 Fire on Crit (Scythe of Elune)",
+	scythearcane = "10s\n+8% Arcane damage taken, next spell imbued (Scythe of Elune)",
+	scythenature = "10s\n+8% Nature damage taken, -8% damage done, 200 Nature/action (Scythe of Elune)",
+	scythefrost = "10s\n+8% Frost damage taken, -25% attack speed, 275 Frost on magic (Scythe of Elune)",
 	-- Warrior
 	demoshout = "30s\nReduces melee AP by 140",
 	thunderclap = "30s\nReduces attack speed by 10%",
@@ -788,6 +814,7 @@ local debuffDescriptions = {
 	shackleundead = "50s\nIncapacitate Undead",
 	mindcontrol = "60s\nControls target, caster immobilized",
 	psychicscream = "8s\nAoE Fear",
+	burningzeal = "18s\n852 Holy damage over 18s, +2% Holy damage taken (T3.5 Set Proc)",
 	-- Rogue
 	sap = "45s\nIncapacitate Humanoid, requires stealth",
 	woundpoison = "15s\nReduces healing taken by 5% up to 5 Times (25%)",
@@ -1127,7 +1154,9 @@ mmPatch:RegisterEvent("PLAYER_LOGIN")
 mmPatch.patched = false
 mmPatch:SetScript("OnEvent", function()
 	mmPatch:SetScript("OnUpdate", function()
-		-- Check every frame until we find and patch the minimap button
+		if (this.tick or 0) > GetTime() then return end
+		this.tick = GetTime() + 0.2
+		-- Check periodically until we find and patch the minimap button
 		local mmFrame = CursiveOptions.minimapFrame
 		if not mmFrame then return end
 		if mmPatch.patched then

@@ -1,5 +1,36 @@
 # Changelog
 
+## v4.0.4 — 2026-04-12
+
+Scythe of Elune debuffs, Burning Zeal, Reflect text, OOR stripes, class range, performance optimization, TestOverlay fixes.
+
+### New Debuffs
+- **Scythe of Elune** — 6 legendary trinket debuffs tracked as raid weapon procs (10s each, `isProc=true`):
+  - Elune's Radiance (Holy, 57666), Elune's Twilight (Shadow, 57665), Elune's Rage (Fire, 52376), Elune's Wrath (Arcane, 57663), Elune's Grace (Nature, 57664), Elune's Ire (Frost, 57662)
+  - Full integration: `shared_debuffs.lua`, `Localization.lua` (enUS + zhCN), `settings.lua` (6 structures), `global.lua` (raidDebuffOrder)
+- **Burning Zeal** — Priest T3.5 "Attire of Pestilence" set proc (52980, 18s Holy DoT + 2% Holy vuln). Category: spellvuln, default disabled.
+
+### New Features
+- **Reflect Spell-School Text** — Health bar overlay shows "Reflect: Fire/Arcane" etc. when target has a known spell reflect buff. `reflectBuffIds` now maps to school strings instead of boolean.
+- **Out-of-Range Stripes** — Diagonal white stripe overlay (40% alpha) on health bars for targets outside spell range. Toggleable checkbox in General settings (default: on).
+- **Class-Specific Range Check** — Replaced hardcoded Hex (45yd, Warlock-only) with per-class reference spells covering different talent trees (Grim Reach, Destructive Reach, Arctic Reach, etc.). `IsSpellInRange()` auto-applies talent bonuses. Target is "in range" if ANY class spell reaches.
+
+### Performance Optimization (4 phases)
+- **Phase 1 — Quick Wins:** Extended `CleanupSharedDebuffs()` to clean orphaned `armorCache`, `lastProcStacks`, `playerOwnedCasts`. Cached CHAT_MSG pattern arrays as module-level locals. Test overlay `RemoveGuid()` call in disable.
+- **Phase 2 — String Caching:** `normalizedToKey` + `nameToNormalized` cache built in `LoadCurses()`. 4 hot-path sites use cache lookup instead of `string.gsub(string.lower(...))`. Eliminates ~4,480 string allocs/sec.
+- **Phase 3 — Scan Optimization:** UNIT_AURA debouncing (50ms coalescing via `ScheduleEvent`). Removed redundant `ScanTargetForSharedDebuffs` call in `ScanForProcDebuff`. Combat-state gating: skip scan when no GUIDs tracked.
+- **Phase 4 — Structural:** `FormatArmor()` and `ResolveBorderMode()`/`ResolveBorderColor()` hoisted to file scope (no per-call closure allocation). Frame reuse: `guid=nil` instead of `ui.unitFrames = {}` (prevents orphans). `BuildRaidOrderLookup` dirty flag: only rebuild when order changes. `missingKeys` pool reused across render ticks. Position comparison uses separate x/y fields (avoids string concat). HP text `SetText()` skipped when value unchanged. Minimap patch OnUpdate throttled to 200ms. `pcall` protection around scan loop. `TITLE_BAR_HEIGHT` constant extracted.
+
+### Bug Fixes
+- **Bar misalignment on frame reuse** — Reused frames retained stale section widths from previous config. Now `DisplayGuid` checks and updates `firstSection`/`secondSection`/`thirdSection` widths when they don't match current config.
+- **TestOverlay `filter.range` error** — `IsSpellInRange()` threw "Unknown unit name" on fake test GUIDs. Added `CursiveTestOverlay_IsTestGuid` guard (always returns "in range").
+- **TestOverlay `HasSpellReflect` error** — `UnitExists()` threw error on fake GUIDs. Added TestOverlay guard (returns nil).
+- **Proc refresh refactor** — Extracted 11-tab nested `ProcessProcDebuffRefresh()` into standalone function for readability. Fixed own Shadow Weaving being skipped by proc refresh check.
+- **SavedVariable type validation** — Added guards for `anchor`, `scale`, `maxrow`, `maxcol`, `maxcurses`, `height`, `width`, `spacing` to prevent corruption crashes.
+- **`puncturearmor` in raidDebuffOrder** — Was missing from the default order array in `global.lua`.
+
+---
+
 ## v4.0.3 — 2026-03-22
 
 CC/Reflect Transparency, Mind Control fix, sort stability, Eye of Dormant fix.

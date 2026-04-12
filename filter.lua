@@ -47,13 +47,32 @@ filter.alive = function(unit)
 	return not UnitIsDead(unit) and true or false
 end
 
+-- v4.0.4: Class-appropriate range spells per talent tree
+-- IsSpellInRange auto-applies talent range bonuses (Grim Reach, Destructive Reach, etc.)
+-- Multiple spells per class cover different talent trees — in range if ANY spell reaches
+local _, playerClass = UnitClass("player")
+local classRangeSpells = {
+	WARLOCK = { "Corruption", "Immolate" },           -- Grim Reach (Affli) / Destructive Reach (Destro)
+	MAGE    = { "Frostbolt", "Fireball", "Arcane Missiles" }, -- Arctic Reach / Flame Throwing / Magic Attunement
+	PRIEST  = { "Shadow Word: Pain", "Smite" },       -- Shadow Reach / Holy Reach
+	DRUID   = { "Moonfire" },                          -- Nature's Reach (all Balance)
+	HUNTER  = { "Auto Shot" },                         -- Hawk Eye (all ranged)
+	SHAMAN  = { "Lightning Bolt" },                    -- No range talents
+}
+local rangeSpells = classRangeSpells[playerClass]
+
 filter.range = function(unit)
-	if IsSpellInRange then
-		-- 16707 is hex which has 45 yd range
-		return IsSpellInRange(16707, unit) == 1 and true or false
-	else
-		return CheckInteractDistance(unit, 4) and true or false
+	-- v4.0.5: TestOverlay GUIDs are always "in range"
+	if CursiveTestOverlay_IsTestGuid and CursiveTestOverlay_IsTestGuid(unit) then return true end
+	if IsSpellInRange and rangeSpells then
+		for i = 1, table.getn(rangeSpells) do
+			local result = IsSpellInRange(rangeSpells[i], unit)
+			if result == 1 then return true end
+		end
+		-- All spells returned 0 or nil — out of range
+		return false
 	end
+	return CheckInteractDistance(unit, 4) and true or false
 end
 
 filter.icon = function(unit)

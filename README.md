@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/WoW-1.12%20Vanilla-blue?style=flat-square" alt="WoW 1.12">
   <img src="https://img.shields.io/badge/TurtleWoW-Compatible-green?style=flat-square" alt="TurtleWoW">
   <img src="https://img.shields.io/badge/SuperWoW-Required-orange?style=flat-square" alt="SuperWoW">
-  <img src="https://img.shields.io/badge/Version-4.0.3-brightgreen?style=flat-square" alt="v4.0.3">
+  <img src="https://img.shields.io/badge/Version-4.0.4-brightgreen?style=flat-square" alt="v4.0.4">
   <img src="https://img.shields.io/badge/Lua-5.0-purple?style=flat-square" alt="Lua 5.0">
 </p>
 
@@ -153,8 +153,9 @@ Cursive Raid tracks **40+ shared debuffs** across all classes:
 | **Rogue** | Expose Armor, Wound Poison, Sap |
 | **Hunter** | Hunter's Mark, Freezing Trap, Scatter Shot, Wyvern Sting |
 | **Paladin** | Judgement of Light, Judgement of Wisdom, Judgement of the Crusader, Hammer of Justice |
-| **Priest** | Shadow Weaving, Shackle Undead, Mind Control, Psychic Scream |
-| **Weapon Procs** | Thunderfury, Nightfall (Spell Vulnerability), Annihilator (Armor Shatter), Puncture Armor, Gift of Arthas |
+| **Priest** | Shadow Weaving, Shackle Undead, Mind Control, Psychic Scream, Burning Zeal (T3.5) |
+| **Weapon Procs** | Thunderfury, Nightfall (Spell Vulnerability), Annihilator (Armor Shatter), Puncture Armor, Gift of Arthas, Potent Venom |
+| **Scythe of Elune** | Elune's Radiance (Holy), Elune's Twilight (Shadow), Elune's Rage (Fire), Elune's Wrath (Arcane), Elune's Grace (Nature), Elune's Ire (Frost) |
 
 ---
 

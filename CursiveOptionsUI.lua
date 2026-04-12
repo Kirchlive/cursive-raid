@@ -117,6 +117,7 @@ local DEFAULTS = {
     filterincombat = true, filterhostile = false, filterattackable = true,
     filterplayer = false, filternotplayer = false, filterrange = true,
     cctransparency = true,
+    oorstripes = true,
     filterraidmark = false, filterhascurse = false, filterignored = false,
     ignorelistuseregex = false,
 }
@@ -318,8 +319,11 @@ local function CreateScrollPanel(parent, name)
     child:SetHeight(1)
     sf:SetScrollChild(child)
 
-    -- OnUpdate on child: keep scroll state in sync
+    -- OnUpdate on child: keep scroll state in sync (change-detection to avoid per-frame work)
     child:SetScript("OnUpdate", function()
+        local h = child:GetHeight()
+        if child._lastH == h then return end
+        child._lastH = h
         update_scroll_state()
     end)
 
@@ -433,6 +437,14 @@ local function CreateRow(scrollChild, globalPrefix, yOffset, label, widget, conf
         cb:SetScript("OnClick", function()
             CursiveOpts.ToggleOption(this.configKey)
         end)
+
+        -- Initialize checkbox state from config
+        if Cursive and Cursive.db and Cursive.db.profile and configKey then
+            local val = Cursive.db.profile[configKey]
+            if val ~= nil then
+                cb:SetChecked(val and true or false)
+            end
+        end
 
         row.checkbox = cb
         return row, yOffset - rowHeight - spacing
@@ -856,6 +868,9 @@ _, y = CreateRow(genChild, "CursiveOptAlwaysTarget", y, "Always Show Current Tar
 _, y = CreateRow(genChild, "CursiveOptCCTransparency", y, "CC / Reflect Transparency", "checkbox", "cctransparency",
     { tooltipText = "Show CC'd (banished, polymorphed) and Spell Reflect targets as transparent" })
 
+_, y = CreateRow(genChild, "CursiveOptOORStripes", y, "Out-of-Range Stripes", "checkbox", "oorstripes",
+    { tooltipText = "Show white stripes on health bars of targets outside cast range (45 yards)" })
+
 -- ============================================================
 -- Helper: CreateBorderDropdown (reusable pfUI-style dropdown)
 -- ============================================================
@@ -920,6 +935,8 @@ local function CreateBorderDropdown(parent, globalName, labelText, configKey, yO
     menuFrame:EnableMouse(true)
 
     menuFrame:SetScript("OnUpdate", function()
+        if (this.tick or 0) > GetTime() then return end
+        this.tick = GetTime() + 0.05
         if not MouseIsOver(menuFrame, 10, -10, -10, 10) and not MouseIsOver(dropBtn) then
             menuFrame:Hide()
         end
@@ -1107,6 +1124,8 @@ do
     menuFrame:EnableMouse(true)
 
     menuFrame:SetScript("OnUpdate", function()
+        if (this.tick or 0) > GetTime() then return end
+        this.tick = GetTime() + 0.05
         if not MouseIsOver(menuFrame, 10, -10, -10, 10) and not MouseIsOver(dropBtn) then
             menuFrame:Hide()
         end
@@ -1271,6 +1290,8 @@ local function CreateTimerColorDropdown(parent, globalName, labelText, configKey
     menuFrame:EnableMouse(true)
 
     menuFrame:SetScript("OnUpdate", function()
+        if (this.tick or 0) > GetTime() then return end
+        this.tick = GetTime() + 0.05
         if not MouseIsOver(menuFrame, 10, -10, -10, 10) and not MouseIsOver(dropBtn) then
             menuFrame:Hide()
         end
@@ -1452,6 +1473,8 @@ do
     menuFrame:Hide()
     menuFrame:EnableMouse(true)
     menuFrame:SetScript("OnUpdate", function()
+        if (this.tick or 0) > GetTime() then return end
+        this.tick = GetTime() + 0.05
         if not MouseIsOver(menuFrame, 10, -10, -10, 10) and not MouseIsOver(dropBtn) then
             menuFrame:Hide()
         end
@@ -1693,6 +1716,8 @@ do
         menuFrame:EnableMouse(true)
 
         menuFrame:SetScript("OnUpdate", function()
+            if (this.tick or 0) > GetTime() then return end
+            this.tick = GetTime() + 0.05
             if not MouseIsOver(menuFrame, 10, -10, -10, 10) and not MouseIsOver(dropBtn) then
                 menuFrame:Hide()
             end
@@ -2135,7 +2160,7 @@ end
 do  -- isolated scope for upvalue budget
 
 local ROW_HEIGHT = 22
-local CONTENT_WIDTH = 370
+local CONTENT_WIDTH = 308  -- must match outer CONTENT_WIDTH (FRAME_WIDTH - 30)
 local ICON_SIZE = 19
 local ICON_GAP = 2
 local MENU_ICON_SIZE = 19
@@ -2294,20 +2319,24 @@ function CursiveOpts_BuildRaidOrder(raidChild, raidRowFrames, ry, data)
 
         if Cursive and Cursive.db and Cursive.db.profile then
             Cursive.db.profile.raidDebuffOrder = enabledKeys
+            Cursive._raidOrderDirty = true -- v4.0.4: Signal ui.lua to rebuild lookup
         end
 
         local inverted = Cursive.db.profile.invertbars
 
         -- Update First/Last labels (position + text + visibility)
-        -- v3.2.1: Shrink icons by 1px when 14+ to fit without overflow
+        local baseOffset = 18
+        -- v4.0.4: Dynamic icon scaling based on enabled count
+        -- Fits all icons within CONTENT_WIDTH regardless of count
         local iconSize = ICON_SIZE
         local iconGap = ICON_GAP
-        if numEnabled >= 14 then
-            iconSize = ICON_SIZE - 1
-            iconGap = ICON_GAP - 1
-            if iconGap < 1 then iconGap = 1 end
+        local availableWidth = CONTENT_WIDTH - baseOffset
+        local neededWidth = numEnabled * (ICON_SIZE + ICON_GAP)
+        if neededWidth > availableWidth and numEnabled > 0 then
+            local maxSlot = math.floor(availableWidth / numEnabled)
+            iconGap = math.max(1, math.min(ICON_GAP, maxSlot - ICON_SIZE))
+            iconSize = math.max(12, maxSlot - iconGap)
         end
-        local baseOffset = 18
 
         if orderContainer.labelLeft and orderContainer.labelRight then
             if numEnabled <= 2 then

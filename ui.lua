@@ -7,6 +7,9 @@ local L = AceLibrary("AceLocale-2.2"):new("Cursive")
 local utils = Cursive.utils
 local filter = Cursive.filter
 
+-- Layout constant: reserved height for (hidden) title bar area
+local TITLE_BAR_HEIGHT = 12
+
 -- Local-cache frequently used globals (avoids repeated global table lookups in hot paths)
 local GetTime = GetTime
 local _RealUnitExists = UnitExists
@@ -147,7 +150,6 @@ end
 
 local function GetBarThirdSectionWidth()
 	local config = Cursive.db.profile
-
 	return config.maxcurses * (config.curseiconsize + ui.padding)
 end
 
@@ -191,7 +193,7 @@ local function UpdateRootBarFrame()
 
 	ui.rootBarFrame:SetWidth(config.maxcol * GetBarWidth())
 	-- Calculate height: title area + all rows + extra spacing
-	local title_size = 12 + config.spacing
+	local title_size = TITLE_BAR_HEIGHT + config.spacing
 	local total_height = title_size + (config.maxrow * (config.height + config.spacing)) + config.spacing
 	ui.rootBarFrame:SetHeight(total_height)
 end
@@ -264,16 +266,17 @@ Cursive.UpdateFramesFromConfig = function()
 end
 
 Cursive.ResetUnitFrames = function()
-	-- hide all existing unit frames
+	-- hide all existing unit frames and clear guid associations
 	for col, rows in pairs(ui.unitFrames) do
 		for row, unitFrame in pairs(rows) do
-			if unitFrame and unitFrame:IsShown() then
+			if unitFrame then
 				unitFrame:Hide()
+				unitFrame.guid = nil
 			end
 		end
 	end
-	-- clear cached frames so they are recreated
-	ui.unitFrames = {}
+	-- v4.0.4: Keep frame objects for reuse (avoid orphans)
+	-- ui.unitFrames = {} -- REMOVED: causes frame orphans
 
 	-- Reapply opacity after frame rebuild
 	if ui.rootBarFrame then
@@ -305,6 +308,20 @@ end
 ui.BarLeave = function()
 	this.parent.hover = false
 	GameTooltip:Hide()
+end
+
+-- Format armor values with k/m suffix (hoisted to file scope to avoid per-frame closure allocation)
+local function FormatArmor(v)
+	local n = tonumber(v) or 0
+	local absN = math.abs(n)
+	local prefix = ""
+	if n < 0 then prefix = "-" end
+	if absN >= 1000000 then
+		return prefix .. floor(absN / 1000000) .. "m"
+	elseif absN >= 10000 then
+		return prefix .. floor(absN / 1000) .. "k"
+	end
+	return v
 end
 
 ui.BarUpdate = function()
@@ -357,6 +374,20 @@ ui.BarUpdate = function()
 		end
 	end
 
+	-- v4.0.4: Out-of-range diagonal stripe indicator
+	if this.oorFrame then
+		if Cursive.db.profile.oorstripes then
+			local inRange = Cursive.filter.range(this.guid)
+			if inRange then
+				this.oorFrame:Hide()
+			else
+				this.oorFrame:Show()
+			end
+		else
+			this.oorFrame:Hide()
+		end
+	end
+
 	-- update caption text
 	local name = UnitName(this.guid)
 	if name and this.nameText then
@@ -385,7 +416,11 @@ ui.BarUpdate = function()
 		end
 
 		if hp then
-			this.hpText:SetText(hp)
+			local hpStr = tostring(hp)
+			if this.hpText._lastVal ~= hpStr then
+				this.hpText._lastVal = hpStr
+				this.hpText:SetText(hpStr)
+			end
 		end
 	end
 
@@ -429,20 +464,6 @@ ui.BarUpdate = function()
 				elseif structure == "removed" then
 					val1 = tostring(removed)
 					val2 = nil
-				end
-
-				-- Format values with k/m
-				local function FormatArmor(v)
-					local n = tonumber(v) or 0
-					local absN = math.abs(n)
-					local prefix = ""
-					if n < 0 then prefix = "-" end
-					if absN >= 1000000 then
-						return prefix .. floor(absN / 1000000) .. "m"
-					elseif absN >= 10000 then
-						return prefix .. floor(absN / 1000) .. "k"
-					end
-					return v
 				end
 
 				local iconPos = config.armorShowIcon or "left"
@@ -669,17 +690,43 @@ local function GetTimerClassColor(curseData)
     return nil
 end
 
+-- Hoisted helpers for GetDebuffBorderColor (avoids per-call closure allocation)
+local function ResolveBorderMode(val)
+    if val == true then return "green" end
+    if not val or val == false or val == "off" then return "off" end
+    return val
+end
+
+local function ResolveBorderColor(mode, curseData)
+    if mode == "green" then return 0, 0.8, 0 end
+    if mode == "red" then return 0.8, 0, 0 end
+    if mode == "black" then return 0.1, 0.1, 0.1 end
+    if mode == "classcolor" then
+        local debuffClass = nil
+        if curseData.spellID and Cursive.curses and Cursive.curses.sharedDebuffSpellLookup then
+            local debuffKey = Cursive.curses.sharedDebuffSpellLookup[curseData.spellID]
+            if debuffKey and Cursive.curses.sharedDebuffMeta[debuffKey] then
+                debuffClass = Cursive.curses.sharedDebuffMeta[debuffKey].class
+            end
+        end
+        if not debuffClass then
+            local _, playerClass = UnitClass("player")
+            if playerClass then debuffClass = string.lower(playerClass) end
+        end
+        if debuffClass then
+            local classKey = string.upper(string.sub(debuffClass, 1, 1)) .. string.sub(debuffClass, 2)
+            local cc = BORDER_CLASS_COLORS[classKey]
+            if cc then return cc[1], cc[2], cc[3] end
+        end
+        return 0, 0.8, 0  -- fallback green
+    end
+    return nil
+end
+
 local function GetDebuffBorderColor(curseData, curseName, guid)
     if not curseData or not curseName then return nil end
     local config = Cursive.db.profile
     if not config then return nil end
-
-    -- Helper: resolve border mode string (handles boolean migration)
-    local function ResolveBorderMode(val)
-        if val == true then return "green" end
-        if not val or val == false or val == "off" then return "off" end
-        return val
-    end
 
     local ownclassMode = ResolveBorderMode(config.borderownclass)
     local ownraidMode = ResolveBorderMode(config.borderownraid)
@@ -691,35 +738,8 @@ local function GetDebuffBorderColor(curseData, curseName, guid)
         return nil
     end
 
-    -- Helper: resolve color from mode string
-    local function ResolveColor(mode, curseData)
-        if mode == "green" then return 0, 0.8, 0 end
-        if mode == "red" then return 0.8, 0, 0 end
-        if mode == "black" then return 0.1, 0.1, 0.1 end
-        if mode == "classcolor" then
-            local debuffClass = nil
-            if curseData.spellID and Cursive.curses and Cursive.curses.sharedDebuffSpellLookup then
-                local debuffKey = Cursive.curses.sharedDebuffSpellLookup[curseData.spellID]
-                if debuffKey and Cursive.curses.sharedDebuffMeta[debuffKey] then
-                    debuffClass = Cursive.curses.sharedDebuffMeta[debuffKey].class
-                end
-            end
-            if not debuffClass then
-                local _, playerClass = UnitClass("player")
-                if playerClass then debuffClass = string.lower(playerClass) end
-            end
-            if debuffClass then
-                local classKey = string.upper(string.sub(debuffClass, 1, 1)) .. string.sub(debuffClass, 2)
-                local cc = BORDER_CLASS_COLORS[classKey]
-                if cc then return cc[1], cc[2], cc[3] end
-            end
-            return 0, 0.8, 0  -- fallback green
-        end
-        return nil
-    end
-
     -- Normalize curseName: "winter's chill" → "winterschill" to match shareddebuffs keys
-    local normalized = string.gsub(string.lower(curseName), "[%s']", "")
+    local normalized = Cursive.curses.nameToNormalized[curseName] or string.gsub(string.lower(curseName), "[%s']", "")
 
     -- Determine ownership: currentPlayer for personal tracking, playerOwnedCasts for shared debuffs
     local isOwn = (curseData.currentPlayer == true)
@@ -757,7 +777,7 @@ local function GetDebuffBorderColor(curseData, curseName, guid)
     end
 
     if mode ~= "off" then
-        return ResolveColor(mode, curseData)
+        return ResolveBorderColor(mode, curseData)
     end
 
     return nil
@@ -964,6 +984,31 @@ local function CreateBarSecondSection(unitFrame, guid)
 			name:SetWidth(nameMaxW)
 			unitFrame.nameText = name
 		end
+
+		-- v4.0.4: Reflect school text (centered over health bar)
+		local reflectText = healthBar:CreateFontString(nil, "OVERLAY", "GameFontWhite")
+		reflectText:SetFont(STANDARD_TEXT_FONT, floor(config.textsize * (config.fontscale or 1) + 0.5), "THINOUTLINE")
+		reflectText:SetJustifyH("CENTER")
+		reflectText:SetPoint("CENTER", healthBar, "CENTER", 0, 0)
+		reflectText:SetWidth(config.healthwidth)
+		reflectText:SetHeight(config.height)
+		reflectText:SetTextColor(1, 0.8, 0, 1)
+		reflectText:Hide()
+		unitFrame.reflectText = reflectText
+
+		-- v4.0.4: Out-of-range diagonal stripe overlay (tiled 32x32 TGA)
+		local oorFrame = CreateFrame("Frame", nil, healthBar)
+		oorFrame:SetFrameLevel(healthBar:GetFrameLevel() + 3)
+		oorFrame:SetAllPoints(healthBar)
+		oorFrame:SetBackdrop({
+			bgFile = "Interface\\AddOns\\Cursive-Raid\\Textures\\diagonal_stripes",
+			tile = true,
+			tileSize = 32,
+		})
+		oorFrame:SetBackdropColor(1, 1, 1, 0.35)
+		oorFrame:EnableMouse(false)
+		oorFrame:Hide()
+		unitFrame.oorFrame = oorFrame
 
 		-- create health bar backdrops
 		if pfUI and pfUI.uf then
@@ -1311,7 +1356,7 @@ local function GetDebuffCategory(curseData, curseName, guid)
 	if not curseData or not curseName then return "otherclass" end
 
 	-- Normalize curseName for shareddebuffs key lookup
-	local normalized = string.gsub(string.lower(curseName), "[%s']", "")
+	local normalized = Cursive.curses.nameToNormalized[curseName] or string.gsub(string.lower(curseName), "[%s']", "")
 
 	-- Determine ownership
 	local isOwn = (curseData.currentPlayer == true)
@@ -1391,7 +1436,7 @@ local function GetRaidSubWeight(curseData, curseName)
 		return raidOrderLookup[curseData.sharedDebuffKey]
 	end
 	-- Normalize curseName to debuffKey (lowercase, no spaces)
-	local normalized = string.gsub(string.lower(curseName), "[%s']", "")
+	local normalized = Cursive.curses.nameToNormalized[curseName] or string.gsub(string.lower(curseName), "[%s']", "")
 	-- Check direct match
 	if raidOrderLookup[normalized] then return raidOrderLookup[normalized] end
 	-- Check via sharedDebuffSpellLookup (spellID -> debuffKey)
@@ -1406,6 +1451,9 @@ end
 
 -- Reusable pool table for curse sorting (avoids table allocation per frame per unit)
 local curseNamesPool = {}
+
+-- Reusable pool for missing debuff keys (avoids table allocation per unit per render tick)
+local missingKeys = {}
 
 -- Reusable cache for order weights per sort cycle (avoids recalculating per comparison)
 local orderWeightCache = {}
@@ -1429,8 +1477,11 @@ local function GetSortedCurses(guidCurses, guid)
 		raidSubWeightCache[k] = nil
 	end
 
-	-- Build raid order lookup for this sort cycle
-	BuildRaidOrderLookup()
+	-- v4.0.4: Only rebuild when order changed
+	if Cursive._raidOrderDirty then
+		BuildRaidOrderLookup()
+		Cursive._raidOrderDirty = false
+	end
 
 	-- Collect keys and pre-compute order weights
 	local config = Cursive.db.profile
@@ -1512,16 +1563,32 @@ local function DisplayGuid(guid)
 
 	local x, y = GetBarCords(ui.row, ui.col)
 
-	-- update position if required
+	-- v4.0.5: Update section widths on reuse (stale widths from old config cause bar misalignment)
 	local config = Cursive.db.profile
-	if not unitFrame.pos or unitFrame.pos ~= x .. y then
+	local expectedBarWidth = GetBarWidth()
+	if math.floor(unitFrame:GetWidth()) ~= math.floor(expectedBarWidth) then
+		unitFrame:SetWidth(expectedBarWidth)
+		if unitFrame.thirdSection then
+			unitFrame.thirdSection:SetWidth(math.max(1, GetBarThirdSectionWidth()))
+		end
+		if unitFrame.secondSection then
+			unitFrame.secondSection:SetWidth(GetBarSecondSectionWidth())
+		end
+		if unitFrame.firstSection then
+			unitFrame.firstSection:SetWidth(GetBarFirstSectionWidth())
+		end
+	end
+
+	-- update position if required (separate x/y fields to avoid string concat per frame)
+	if unitFrame.posX ~= x or unitFrame.posY ~= y then
 		unitFrame:ClearAllPoints()
 		if config.expandupwards then
 			unitFrame:SetPoint("BOTTOMLEFT", ui.rootBarFrame, "BOTTOMLEFT", x, y)
 		else
 			unitFrame:SetPoint("TOPLEFT", ui.rootBarFrame, "TOPLEFT", x, y)
 		end
-		unitFrame.pos = x .. y
+		unitFrame.posX = x
+		unitFrame.posY = y
 	end
 
 	-- check for shared debuffs
@@ -1701,7 +1768,8 @@ local function DisplayGuid(guid)
 	local guidCurses = Cursive.curses.guids[guid]
 
 	-- v3.2.1: Inject missing raid debuffs as ghost entries for correct sort order
-	local missingKeys = {}
+	for i = table.getn(missingKeys), 1, -1 do missingKeys[i] = nil end
+	missingKeys.n = 0
 	if Cursive.db.profile.showMissingDebuffs == true and guidCurses and Cursive.curses.sharedDebuffs then
 		local sd = Cursive.db.profile.shareddebuffs
 		if sd then
@@ -1714,7 +1782,7 @@ local function DisplayGuid(guid)
 							found = true
 							break
 						end
-						local normalized = string.gsub(string.lower(curseName), "[%s']", "")
+						local normalized = Cursive.curses.nameToNormalized[curseName] or string.gsub(string.lower(curseName), "[%s']", "")
 						if normalized == debuffKey then
 							found = true
 							break
@@ -1828,10 +1896,19 @@ local function DisplayGuid(guid)
 	unitFrame:Show()
 
 	-- v3.2.2: Transparent display for CC'd / Spell Reflect targets
-	if Cursive.db.profile.cctransparency and (Cursive.curses:HasActiveCC(guid) or Cursive.curses:HasSpellReflect(guid)) then
+	local reflectSchool = Cursive.curses:HasSpellReflect(guid)
+	if Cursive.db.profile.cctransparency and (Cursive.curses:HasActiveCC(guid) or reflectSchool) then
 		unitFrame:SetAlpha(0.35)
 	else
 		unitFrame:SetAlpha(1.0)
+	end
+	if unitFrame.reflectText then
+		if reflectSchool then
+			unitFrame.reflectText:SetText("Reflect: " .. reflectSchool)
+			unitFrame.reflectText:Show()
+		else
+			unitFrame.reflectText:Hide()
+		end
 	end
 
 	ui.numDisplayed = ui.numDisplayed + 1
@@ -1892,6 +1969,9 @@ ui:SetScript("OnUpdate", function()
 		this.tick = GetTime() + 0.1
 	end
 
+	-- v4.0.4: Protect scan loop with pcall to prevent silent tracking death on Lua errors
+	local scanOk, scanErr = pcall(function()
+
 	-- v3.2.1: Freeze test overlay timers every frame
 	if CursiveTestOverlay_FreezeTimers then
 		CursiveTestOverlay_FreezeTimers()
@@ -1929,7 +2009,7 @@ ui:SetScript("OnUpdate", function()
 	end
 
 	-- run through all guids and fill with bars
-	local title_size = 12 + config.spacing
+	local title_size = TITLE_BAR_HEIGHT + config.spacing
 
 	local topMaxHp = 0
 	local secondMaxHp = 0
@@ -2056,6 +2136,11 @@ ui:SetScript("OnUpdate", function()
 				end
 			end
 		end
+	end
+
+	end) -- end pcall
+	if not scanOk then
+		DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[Cursive] Scan error:|r " .. tostring(scanErr))
 	end
 
 end)

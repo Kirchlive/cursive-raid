@@ -309,6 +309,7 @@ function CursiveTestOverlay_Disable()
 
     -- Remove all test entries
     for guid, _ in pairs(testData) do
+        curses:RemoveGuid(guid)
         Cursive.core.guids[guid] = nil
         curses.guids[guid] = nil
 

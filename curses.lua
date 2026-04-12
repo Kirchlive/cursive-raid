@@ -138,6 +138,10 @@ local immune_test = L["Your (.+) fail.+\. (.+) is immune"]
 local block_test = L["Your (.+) was blocked by (.+)"]
 local dodge_test = L["Your (.+) was dodged by (.+)"]
 
+-- v4.0.4: Pre-built test arrays for CHAT_MSG_SPELL_SELF_DAMAGE (avoid per-event allocation)
+local spell_failed_tests_base = { resist_test, immune_test }
+local spell_failed_tests_melee = { resist_test, immune_test, missed_test, parry_test, block_test, dodge_test }
+
 local molten_blast_test = L["Your Molten Blast(.+)for .+ Fire damage"]
 
 local lastGuid = nil
@@ -277,6 +281,28 @@ function curses:LoadCurses()
 		curses.trackedCurseNamesToTextures[data.name] = texture
 		-- update trackedCurseIds
 		curses.trackedCurseIds[id].texture = texture
+	end
+
+	-- v4.0.4: Pre-compute normalized debuff names (avoids string.gsub in hot paths)
+	curses.normalizedToKey = {}
+	curses.nameToNormalized = {}
+
+	for debuffKey, spells in pairs(curses.sharedDebuffs) do
+		curses.normalizedToKey[debuffKey] = debuffKey
+		for _, spellData in pairs(spells) do
+			if type(spellData) == "table" and spellData.name then
+				local normalized = string.gsub(string.lower(spellData.name), "[%s']", "")
+				curses.nameToNormalized[spellData.name] = normalized
+				curses.normalizedToKey[normalized] = debuffKey
+			end
+		end
+	end
+
+	for spellID, spellData in pairs(curses.trackedCurseIds) do
+		if spellData.name then
+			local normalized = string.gsub(string.lower(spellData.name), "[%s']", "")
+			curses.nameToNormalized[spellData.name] = normalized
+		end
 	end
 
 	if curses.isDruid or curses.isRogue then
@@ -488,10 +514,8 @@ function curses.ScanForProcDebuff(self, debuffKey, targetGuid)
 			}
 			-- v3.2.1 FIX: Ensure target is in core.guids for rendering
 			Cursive.core.addGuid(targetGuid)
-			-- v4.0.1 FIX: Run full shared debuff scan for this GUID
-			-- Without this, Shadow Weaving on non-targeted mobs only shows initial state
-			-- ScanTargetForSharedDebuffs updates stacks/timer in curses.guids directly
-			curses:ScanTargetForSharedDebuffs(targetGuid)
+			-- v4.0.4: Removed redundant full scan (ScanForProcDebuff already updates the specific debuff)
+			-- curses:ScanTargetForSharedDebuffs(targetGuid)
 			if CursiveSVDebug then
 				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[SV] ScanProc NEW: "..tostring(procSpellData and procSpellData.name).." queued|r")
 			end
@@ -640,6 +664,71 @@ function curses:CheckArmorChangeForEA(targetGuid)
 	mon.prevArmor = armorNow
 end
 
+-- v4.0.4: Extracted proc-refresh logic (was 11-tab nested; now standalone for readability)
+-- Returns true if the existing debuff entry was updated (already tracked)
+local function ProcessProcDebuffRefresh(existing, spellData, meta, debuffKey, targetGuid, now, stackCount, texture)
+	-- v4.0.4 FIX: Proc debuffs must always go through refresh check,
+	-- even when currentPlayer == true (fixes own Shadow Weaving skipped)
+	local isProcDebuff = meta and meta.isProc
+	if existing.currentPlayer ~= false and not isProcDebuff then
+		return
+	end
+
+	-- Update live texture
+	existing.sharedTexture = texture
+	local newStacks = stackCount or 0
+
+	-- v3.2.1 FIX: Detect proc debuff refresh
+	if meta and meta.isProc then
+		local oldStacks = curses.lastProcStacks[targetGuid] and curses.lastProcStacks[targetGuid][debuffKey] or -1
+		local stackChanged = (newStacks ~= oldStacks and oldStacks ~= -1)
+		local isNewDebuff = (oldStacks == -1)
+
+		-- Consume procExpected flag if present (prevents stale flags)
+		local procTriggered = false
+		if curses.procExpected[targetGuid] and curses.procExpected[targetGuid][debuffKey] then
+			local triggerTime = curses.procExpected[targetGuid][debuffKey]
+			if (now - triggerTime) < 2.0 then
+				procTriggered = true
+			end
+			curses.procExpected[targetGuid][debuffKey] = nil
+		end
+
+		-- v3.2.1: Weapon procs without triggerSpells always refresh timer
+		local noTrigger = (not meta.triggerSpells or table.getn(meta.triggerSpells) == 0)
+
+		-- v3.2.1 FIX: Only reset timer on actual evidence of refresh
+		local elapsed = now - existing.start
+		local halfDuration = (spellData.duration or 10) * 0.5
+		local procRefreshValid = procTriggered and (isNewDebuff or elapsed > halfDuration)
+
+		if stackChanged or noTrigger or procRefreshValid then
+			existing.start = now
+			existing.duration = spellData.duration
+			if procTriggered and curses.playerOwnedCasts[targetGuid] and curses.playerOwnedCasts[targetGuid][debuffKey] then
+				local ownCastTime = curses.playerOwnedCasts[targetGuid][debuffKey]
+				if (now - ownCastTime) < 2.0 then
+					existing.currentPlayer = true
+				end
+			end
+			if CursiveSVDebug then
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00[SV] REFRESH: "..tostring(spellData.name).." stacks "..tostring(oldStacks).."->"..tostring(newStacks).." procFlag="..tostring(procTriggered).." noTrig="..tostring(noTrigger).."|r")
+			end
+		end
+
+		-- Track stacks for next comparison
+		if not curses.lastProcStacks[targetGuid] then
+			curses.lastProcStacks[targetGuid] = {}
+		end
+		curses.lastProcStacks[targetGuid][debuffKey] = newStacks
+	end
+
+	-- Update stacks (except EA which uses armor-diff calculated CP)
+	if debuffKey ~= "exposearmor" then
+		existing.sharedStacks = newStacks
+	end
+end
+
 -- v3.2: Scan target for all enabled shared debuffs (reliable detection for procs + direct casts)
 -- Called on UNIT_AURA for target, and periodically via UI update
 function curses:ScanTargetForSharedDebuffs(targetGuid)
@@ -660,89 +749,13 @@ function curses:ScanTargetForSharedDebuffs(targetGuid)
 
 					-- v3.2.1 FIX: Check if this debuff is already applied in guids table
 					-- If yes, update texture/stacks and check for timer refresh (proc debuffs)
-					-- IMPORTANT: own curses (currentPlayer=true) have precise timing from ApplyCurse
-					-- and must NOT be overwritten by the shared debuff system
 					local alreadyApplied = false
 					if spellData and curses.guids[targetGuid] then
-						local name = spellData.name
-						local existing = curses.guids[targetGuid][name]
+						local existing = curses.guids[targetGuid][spellData.name]
 						if existing then
 							alreadyApplied = true
-							-- v4.0.4 FIX: Proc debuffs must always go through refresh check,
-							-- even when currentPlayer == true (fixes own Shadow Weaving skipped)
-							local isProcDebuff = curses.sharedDebuffMeta[debuffKey] and curses.sharedDebuffMeta[debuffKey].isProc
-							if existing.currentPlayer == false or isProcDebuff then
-								-- Update live texture
-								existing.sharedTexture = texture
-								local meta = curses.sharedDebuffMeta[debuffKey]
-								local newStacks = stackCount or 0
-
-								-- v3.2.1 FIX: Detect proc debuff refresh
-								-- Only reset timer when we have EVIDENCE the debuff was actually refreshed:
-								-- 1. Stack count changed (e.g. SV 2→4 or 4→3)
-								-- 2. Debuff is new (first scan, oldStacks == -1)
-								-- 3. Weapon procs without triggerSpells (noTrigger)
-								-- NOTE: procExpected alone is NOT enough — Shadow Bolt casts set this flag
-								-- continuously but SV at max stacks does NOT refresh on every hit
-								if meta and meta.isProc then
-									local oldStacks = curses.lastProcStacks[targetGuid] and curses.lastProcStacks[targetGuid][debuffKey] or -1
-									local stackChanged = (newStacks ~= oldStacks and oldStacks ~= -1)
-									local isNewDebuff = (oldStacks == -1)
-
-									-- Consume procExpected flag if present (prevents stale flags)
-									local procTriggered = false
-									if curses.procExpected[targetGuid] and curses.procExpected[targetGuid][debuffKey] then
-										local triggerTime = curses.procExpected[targetGuid][debuffKey]
-										if (now - triggerTime) < 2.0 then
-											procTriggered = true
-										end
-										-- Always consume to prevent stale flags
-										curses.procExpected[targetGuid][debuffKey] = nil
-									end
-
-									-- v3.2.1: Weapon procs without triggerSpells (Thunderfury, Nightfall, Annihilator)
-								-- always refresh timer on scan since we can't track the trigger
-								local noTrigger = (not meta.triggerSpells or table.getn(meta.triggerSpells) == 0)
-
-								-- v3.2.1 FIX: Only reset timer on actual evidence of refresh
-								-- For stacking procs: stack count change is reliable signal
-								-- For non-stacking procs (SV): only refresh if debuff is new OR
-								-- enough of its duration has elapsed that a real refresh is plausible
-								-- (prevents timer reset from Shadow Bolt spam when SV is still fresh)
-								-- noTrigger: weapon procs always refresh (no other signal available)
-								local elapsed = now - existing.start
-								local halfDuration = (spellData.duration or 10) * 0.5
-								local procRefreshValid = procTriggered and (isNewDebuff or elapsed > halfDuration)
-
-								if stackChanged or noTrigger or procRefreshValid then
-										-- Debuff was refreshed → reset timer
-										existing.start = now
-										existing.duration = spellData.duration
-										-- v3.2.1: If OUR trigger spell caused this, mark as own debuff
-										-- Check playerOwnedCasts to distinguish own vs other player's procs
-										if procTriggered and curses.playerOwnedCasts[targetGuid] and curses.playerOwnedCasts[targetGuid][debuffKey] then
-											local ownCastTime = curses.playerOwnedCasts[targetGuid][debuffKey]
-											if (now - ownCastTime) < 2.0 then
-												existing.currentPlayer = true
-											end
-										end
-										if CursiveSVDebug then
-											DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00[SV] REFRESH: "..tostring(name).." stacks "..tostring(oldStacks).."->"..tostring(newStacks).." procFlag="..tostring(procTriggered).." noTrig="..tostring(noTrigger).."|r")
-										end
-									end
-
-									-- Track stacks for next comparison
-									if not curses.lastProcStacks[targetGuid] then
-										curses.lastProcStacks[targetGuid] = {}
-									end
-									curses.lastProcStacks[targetGuid][debuffKey] = newStacks
-								end
-
-								-- Update stacks (except EA which uses armor-diff calculated CP)
-								if debuffKey ~= "exposearmor" then
-									existing.sharedStacks = newStacks
-								end
-							end
+							local meta = curses.sharedDebuffMeta[debuffKey]
+							ProcessProcDebuffRefresh(existing, spellData, meta, debuffKey, targetGuid, now, stackCount, texture)
 						end
 					end
 
@@ -818,6 +831,23 @@ function curses:CleanupSharedDebuffs()
 		end
 	end
 
+	-- v4.0.4: Cleanup orphaned armorCache, lastProcStacks, playerOwnedCasts
+	for guid in pairs(curses.armorCache) do
+		if not UnitExists(guid) then curses.armorCache[guid] = nil end
+	end
+	for guid in pairs(curses.lastProcStacks) do
+		if not UnitExists(guid) then curses.lastProcStacks[guid] = nil end
+	end
+	for guid, casts in pairs(curses.playerOwnedCasts) do
+		if not UnitExists(guid) then
+			curses.playerOwnedCasts[guid] = nil
+		else
+			for key, ts in pairs(casts) do
+				if (now - ts) > 600 then casts[key] = nil end
+			end
+		end
+	end
+
 	for debuffKey, targets in pairs(curses.sharedDebuffGuids) do
 		local maxDuration = 0
 		-- Find the longest duration for this debuff type
@@ -854,12 +884,25 @@ end)
 
 -- v3.2: Scan target debuffs when auras change (catches procs, direct casts, everything)
 Cursive:RegisterEvent("UNIT_AURA", function()
+	-- v4.0.4: Skip entirely when no targets are tracked (e.g. idle in city)
+	if not next(Cursive.core.guids) then return end
 	local a1 = arg1
 	if a1 == "target" then
 		local _, targetGuid = UnitExists("target")
 		if targetGuid then
-			curses:ScanTargetForSharedDebuffs(targetGuid)
-			-- v3.2: Check armor monitor for Expose Armor CP detection (aDF-style)
+			-- v4.0.4: Debounce aura scans (coalesce burst events within 50ms)
+			curses._pendingAuraGuid = targetGuid
+			if not curses._pendingAuraScan then
+				curses._pendingAuraScan = true
+				Cursive:ScheduleEvent("CursiveAuraDebounce", function()
+					curses._pendingAuraScan = false
+					local guid = curses._pendingAuraGuid
+					if guid and UnitExists(guid) then
+						curses:ScanTargetForSharedDebuffs(guid)
+					end
+				end, 0.05)
+			end
+			-- Armor monitor still immediate (rare, targeted)
 			if curses.armorMonitor[targetGuid] and curses.armorMonitor[targetGuid].expectingEA then
 				curses:CheckArmorChangeForEA(targetGuid)
 			end
@@ -1240,24 +1283,12 @@ end)
 
 Cursive:RegisterEvent("CHAT_MSG_SPELL_SELF_DAMAGE",
 		function(message)
-			local spell_failed_tests = {
-				resist_test,
-				immune_test
-			}
-			-- only some classes have melee spells that need to check for dodge, parry, miss, block
-			if playerClassName == "DRUID" or playerClassName == "HUNTER" or playerClassName == "ROGUE" then
-				spell_failed_tests = {
-					resist_test,
-					immune_test,
-					missed_test,
-					parry_test,
-					block_test,
-					dodge_test
-				}
-			end
+			-- v4.0.4: Use cached test arrays instead of per-event allocation
+			local tests = (playerClassName == "DRUID" or playerClassName == "HUNTER" or playerClassName == "ROGUE")
+				and spell_failed_tests_melee or spell_failed_tests_base
 
 			local spellName, failedTarget
-			for _, test in pairs(spell_failed_tests) do
+			for _, test in ipairs(tests) do
 				local _, _, foundSpell, foundTarget = strfind(message, test)
 				if foundSpell and foundTarget then
 					spellName = foundSpell
@@ -1591,11 +1622,11 @@ end
 -- v3.2.2: Known Spell Reflect buff IDs (mob buffs, not player abilities)
 -- These are buffs on mobs that reflect spells back at casters
 curses.reflectBuffIds = {
-	[22067]  = true, -- Reflection (100% All Spells, 10s) - Majordomo Adds, misc dungeon mobs
-	[20619]  = true, -- Magic Reflection (50% All Spells, 10s AoE) - MC mobs
-	[13022]  = true, -- Fire and Arcane Reflect (100% Fire+Arcane) - Anubisath (AQ)
-	[19595]  = true, -- Shadow and Frost Reflect (100% Shadow+Frost) - Anubisath (AQ)
-	[460856] = true, -- Reflect Magic (101% All Spells, 5s) - TurtleWoW Custom
+	[22067]  = "All",          -- Reflection (100% All Spells, 10s) - Majordomo Adds, misc dungeon mobs
+	[20619]  = "All",          -- Magic Reflection (50% All Spells, 10s AoE) - MC mobs
+	[13022]  = "Fire/Arcane",  -- Fire and Arcane Reflect (100% Fire+Arcane) - Anubisath (AQ)
+	[19595]  = "Shadow/Frost", -- Shadow and Frost Reflect (100% Shadow+Frost) - Anubisath (AQ)
+	[460856] = "All",          -- Reflect Magic (101% All Spells, 5s) - TurtleWoW Custom
 }
 
 -- v3.2.2: Check if a GUID has any active CC debuff (banish, polymorph, etc.)
@@ -1626,17 +1657,20 @@ end
 -- v3.2.2: Check if a GUID has an active Spell Reflect buff
 -- Scans UnitBuff for known reflect spell IDs (requires SuperWoW for spellID)
 function curses:HasSpellReflect(guid)
-	if not UnitExists(guid) then return false end
+	-- v4.0.5: TestOverlay GUIDs have no reflect
+	if CursiveTestOverlay_IsTestGuid and CursiveTestOverlay_IsTestGuid(guid) then return nil end
+	if not UnitExists(guid) then return nil end
 
 	for i = 1, 64 do
 		local _, _, spellID = UnitBuff(guid, i)
 		if not spellID then break end
-		if curses.reflectBuffIds[spellID] then
-			return true
+		local school = curses.reflectBuffIds[spellID]
+		if school then
+			return school
 		end
 	end
 
-	return false
+	return nil
 end
 
 Cursive.curses = curses
