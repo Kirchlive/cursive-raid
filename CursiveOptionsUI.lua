@@ -866,10 +866,10 @@ _, y = CreateRow(genChild, "CursiveOptAlwaysTarget", y, "Always Show Current Tar
     { tooltipText = "Always show current target at bottom of mob list" })
 
 _, y = CreateRow(genChild, "CursiveOptCCTransparency", y, "CC / Reflect Transparency", "checkbox", "cctransparency",
-    { tooltipText = "Show CC'd (banished, polymorphed) and Spell Reflect targets as transparent" })
+    { tooltipText = "Show CC'd (banished, polymorphed) and Spell Reflect targets as transparent. Reflect targets also show the reflected spell school (e.g. 'Reflect: Fire/Arcane')" })
 
-_, y = CreateRow(genChild, "CursiveOptOORStripes", y, "Out-of-Range Stripes", "checkbox", "oorstripes",
-    { tooltipText = "Show white stripes on health bars of targets outside cast range (45 yards)" })
+_, y = CreateRow(genChild, "CursiveOptOORStripes", y, "Out-of-Range / Line-of-Sight Stripes", "checkbox", "oorstripes",
+    { tooltipText = "Show diagonal stripes on health bars of targets outside cast range or not in line of sight (requires UnitXP SP3 for LoS detection)" })
 
 -- ============================================================
 -- Helper: CreateBorderDropdown (reusable pfUI-style dropdown)
@@ -2944,6 +2944,8 @@ function CursiveOpts.Initialize()
     CursiveOpts.SetCheckbox("CursiveOptInvertBars", p.invertbars)
     CursiveOpts.SetCheckbox("CursiveOptExpandUp", p.expandupwards)
     CursiveOpts.SetCheckbox("CursiveOptAlwaysTarget", p.alwaysshowcurrenttarget)
+    CursiveOpts.SetCheckbox("CursiveOptCCTransparency", p.cctransparency)
+    CursiveOpts.SetCheckbox("CursiveOptOORStripes", p.oorstripes)
     CursiveOpts.SetCheckbox("CursiveRaidShowMissing", p.showMissingDebuffs)
     CursiveOpts.SetCheckbox("CursiveRaidIncludeOwn", p.includeOwnRaidInOrder)
 

@@ -481,7 +481,9 @@ function curses.ScanForProcDebuff(self, debuffKey, targetGuid)
 				-- v4.0.4: During active channeling, be more lenient with timer refresh
 				-- Channel ticks proc debuffs repeatedly but we only get scan snapshots
 				local channelRefresh = curses.isChanneling and (elapsed > 1.0)
-				local shouldRefresh = stackChanged or isNewDebuff or noTrigger or channelRefresh or (elapsed > halfDuration)
+				-- v4.0.5 FIX: noTrigger procs only refresh on first detection or re-application
+				local noTriggerRefresh = noTrigger and (isNewDebuff or elapsed > (procSpellData.duration or 10))
+				local shouldRefresh = stackChanged or noTriggerRefresh or channelRefresh or (elapsed > halfDuration)
 
 				if shouldRefresh then
 					existing.start = GetTime()
@@ -694,15 +696,18 @@ local function ProcessProcDebuffRefresh(existing, spellData, meta, debuffKey, ta
 			curses.procExpected[targetGuid][debuffKey] = nil
 		end
 
-		-- v3.2.1: Weapon procs without triggerSpells always refresh timer
+		-- v3.2.1: Weapon procs without triggerSpells
 		local noTrigger = (not meta.triggerSpells or table.getn(meta.triggerSpells) == 0)
 
 		-- v3.2.1 FIX: Only reset timer on actual evidence of refresh
 		local elapsed = now - existing.start
 		local halfDuration = (spellData.duration or 10) * 0.5
 		local procRefreshValid = procTriggered and (isNewDebuff or elapsed > halfDuration)
+		-- v4.0.5 FIX: noTrigger procs must only refresh on first detection or re-application
+		-- (was: unconditional refresh on every scan, resetting timer multiple times/second)
+		local noTriggerRefresh = noTrigger and (isNewDebuff or elapsed > (spellData.duration or 10))
 
-		if stackChanged or noTrigger or procRefreshValid then
+		if stackChanged or noTriggerRefresh or procRefreshValid then
 			existing.start = now
 			existing.duration = spellData.duration
 			if procTriggered and curses.playerOwnedCasts[targetGuid] and curses.playerOwnedCasts[targetGuid][debuffKey] then

@@ -1,5 +1,20 @@
 # Changelog
 
+## v4.0.5 — 2026-04-14
+
+Bugfixes for Scythe/weapon proc timers, checkbox defaults, and visual improvements.
+
+### Bug Fixes
+- **noTrigger proc timer reset** — Weapon procs without triggerSpells (Scythe of Elune, Thunderfury, Annihilator, Nightfall, Puncture Armor, Gift of Arthas, Potent Venom, Burning Zeal, Ignite) had their duration timer reset on every UNIT_AURA scan cycle, making the countdown appear frozen for ~4-5 seconds. Fix: `noTrigger` procs only refresh timer on first detection or re-application after expiry.
+- **OOR/CC checkbox defaults** — `oorstripes` and `cctransparency` were not registered in AceDB defaults. Existing profiles had `nil` values, causing checkboxes to display unchecked even when the intended default was enabled. Fix: added AceDB defaults + nil-to-true profile patch in OnEnable + added missing `SetCheckbox` calls in `CursiveOpts.Initialize()`.
+
+### Visual Improvements
+- **Reflect text at full opacity** — Spell school text ("Reflect: Fire/Arcane") is now rendered in an independent overlay frame, so it stays fully visible even when the bar is transparent from CC/Reflect Transparency.
+- **OOR stripe direction** — Diagonal stripes changed from `\` to `/` direction (new mirrored TGA texture `diagonal_stripes_rev.tga`).
+- **Line-of-Sight detection** — OOR stripes now also show when the target is not in line of sight (via `UnitXP('inSight', ...)`, requires UnitXP SP3). Checkbox renamed to "Out-of-Range / Line-of-Sight Stripes".
+
+---
+
 ## v4.0.4 — 2026-04-12
 
 Scythe of Elune debuffs, Burning Zeal, Reflect text, OOR stripes, class range, performance optimization, TestOverlay fixes.

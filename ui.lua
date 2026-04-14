@@ -374,11 +374,17 @@ ui.BarUpdate = function()
 		end
 	end
 
-	-- v4.0.4: Out-of-range diagonal stripe indicator
+	-- v4.0.5: Out-of-range / line-of-sight stripe indicator
 	if this.oorFrame then
 		if Cursive.db.profile.oorstripes then
 			local inRange = Cursive.filter.range(this.guid)
-			if inRange then
+			-- v4.0.5: Also check line of sight via UnitXP (SP3)
+			local inSight = true
+			if inRange and UnitXP then
+				local ok, los = pcall(UnitXP, "inSight", "player", this.guid)
+				if ok and los == 0 then inSight = false end
+			end
+			if inRange and inSight then
 				this.oorFrame:Hide()
 			else
 				this.oorFrame:Show()
@@ -985,23 +991,30 @@ local function CreateBarSecondSection(unitFrame, guid)
 			unitFrame.nameText = name
 		end
 
-		-- v4.0.4: Reflect school text (centered over health bar)
-		local reflectText = healthBar:CreateFontString(nil, "OVERLAY", "GameFontWhite")
+		-- v4.0.5: Reflect school text in own overlay frame (immune to parent alpha)
+		local reflectOverlay = CreateFrame("Frame", nil, ui.rootBarFrame)
+		reflectOverlay:SetFrameStrata("HIGH")
+		reflectOverlay:SetFrameLevel((healthBar:GetFrameLevel() or 5) + 10)
+		reflectOverlay:SetAllPoints(healthBar)
+		reflectOverlay:EnableMouse(false)
+		local reflectText = reflectOverlay:CreateFontString(nil, "OVERLAY", "GameFontWhite")
 		reflectText:SetFont(STANDARD_TEXT_FONT, floor(config.textsize * (config.fontscale or 1) + 0.5), "THINOUTLINE")
 		reflectText:SetJustifyH("CENTER")
-		reflectText:SetPoint("CENTER", healthBar, "CENTER", 0, 0)
+		reflectText:SetPoint("CENTER", reflectOverlay, "CENTER", 0, 0)
 		reflectText:SetWidth(config.healthwidth)
 		reflectText:SetHeight(config.height)
 		reflectText:SetTextColor(1, 0.8, 0, 1)
 		reflectText:Hide()
+		unitFrame.reflectOverlay = reflectOverlay
 		unitFrame.reflectText = reflectText
+		reflectOverlay:Hide()
 
-		-- v4.0.4: Out-of-range diagonal stripe overlay (tiled 32x32 TGA)
+		-- v4.0.5: Out-of-range diagonal stripe overlay (/ direction, tiled backdrop)
 		local oorFrame = CreateFrame("Frame", nil, healthBar)
 		oorFrame:SetFrameLevel(healthBar:GetFrameLevel() + 3)
 		oorFrame:SetAllPoints(healthBar)
 		oorFrame:SetBackdrop({
-			bgFile = "Interface\\AddOns\\Cursive-Raid\\Textures\\diagonal_stripes",
+			bgFile = "Interface\\AddOns\\Cursive-Raid\\Textures\\diagonal_stripes_rev",
 			tile = true,
 			tileSize = 32,
 		})
@@ -1902,12 +1915,15 @@ local function DisplayGuid(guid)
 	else
 		unitFrame:SetAlpha(1.0)
 	end
-	if unitFrame.reflectText then
+	-- v4.0.5: Reflect overlay is independent frame (not affected by unitFrame alpha)
+	if unitFrame.reflectOverlay then
 		if reflectSchool then
 			unitFrame.reflectText:SetText("Reflect: " .. reflectSchool)
 			unitFrame.reflectText:Show()
+			unitFrame.reflectOverlay:Show()
 		else
 			unitFrame.reflectText:Hide()
+			unitFrame.reflectOverlay:Hide()
 		end
 	end
 

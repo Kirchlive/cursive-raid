@@ -47,6 +47,9 @@ function Cursive:OnEnable()
 	if type(p.spacing) ~= "number" then
 		p.spacing = 2
 	end
+	-- v4.0.5: Patch new boolean settings into existing profiles (nil → default true)
+	if p.oorstripes == nil then p.oorstripes = true end
+	if p.cctransparency == nil then p.cctransparency = true end
 
 	local validCats = { ownclass = true, ownraid = true, otherclass = true, otherraid = true, none = true }
 	local mainCats = { ownclass = true, ownraid = true, otherclass = true, otherraid = true }

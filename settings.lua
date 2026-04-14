@@ -158,6 +158,8 @@ Cursive:RegisterDefaults("profile", {
 	filterplayer = false,
 	filternotplayer = false,
 	filterrange = true,
+	cctransparency = true,
+	oorstripes = true,
 	filterraidmark = false,
 	filterhascurse = false,
 	filterignored = false,
