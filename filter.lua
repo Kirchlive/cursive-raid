@@ -66,11 +66,11 @@ filter.range = function(unit)
 	if CursiveTestOverlay_IsTestGuid and CursiveTestOverlay_IsTestGuid(unit) then return true end
 	if IsSpellInRange and rangeSpells then
 		for i = 1, table.getn(rangeSpells) do
-			local result = IsSpellInRange(rangeSpells[i], unit)
-			if result == 1 then return true end
+			-- pcall: IsSpellInRange errors if spell is not in spellbook
+			local ok, result = pcall(IsSpellInRange, rangeSpells[i], unit)
+			if ok and result == 1 then return true end
 		end
-		-- All spells returned 0 or nil — out of range
-		return false
+		-- All spells returned 0/nil/error — fall through to distance check
 	end
 	return CheckInteractDistance(unit, 4) and true or false
 end
