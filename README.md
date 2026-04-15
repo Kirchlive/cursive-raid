@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/WoW-1.12%20Vanilla-blue?style=flat-square" alt="WoW 1.12">
   <img src="https://img.shields.io/badge/TurtleWoW-Compatible-green?style=flat-square" alt="TurtleWoW">
   <img src="https://img.shields.io/badge/SuperWoW-Required-orange?style=flat-square" alt="SuperWoW">
-  <img src="https://img.shields.io/badge/Version-4.0.5-brightgreen?style=flat-square" alt="v4.0.5">
+  <img src="https://img.shields.io/badge/Version-4.1.0-brightgreen?style=flat-square" alt="v4.1.0">
   <img src="https://img.shields.io/badge/Lua-5.0-purple?style=flat-square" alt="Lua 5.0">
 </p>
 
@@ -319,18 +319,27 @@ local guid = Cursive:GetTarget("Corruption", "HIGHEST_HP", {})
 
 ## Version History
 
-### v4.0.3 — March 2026 *(current)*
+### v4.1.0 — April 2026 *(current)*
+
+Major performance update. Fixed extreme lag in Alterac Valley and large battlegrounds.
+
+- **GUID tracking cap (60)** — Prevents unbounded unit accumulation in BGs with 80+ combatants
+- **Range/LOS/Reflect/CC caching** — 250ms TTL caches eliminate ~95% of redundant WoW API calls
+- **Single-pass aura scanning** — One debuff+buff scan per GUID per 150ms instead of per-debuff-per-tick
+- **EA Poller throttled** — 10Hz instead of 60Hz (frame-rate)
+- **Aura-gone handler optimized** — Direct key lookup instead of full GUID iteration
+
+### v4.0.5 — April 2026
+
+Bugfixes for weapon proc timers and visual improvements.
+
+### v4.0.4 — April 2026
+
+Scythe of Elune debuffs, Reflect text, OOR stripes, class-specific range check, 4-phase performance optimization.
+
+### v4.0.3 — March 2026
 
 CC/Reflect Transparency, Mind Control fix, new consumable debuff.
-
-**Fixes:**
-- **Mind-Controlled players** — MC'd players no longer appear in mob list despite "Not Player" filter
-- **armorCache nil crash** — Fixed `CleanupArmorCache` crash before initialization
-
-**New Features:**
-- **CC / Reflect Transparency** — CC'd (Banish, Poly, etc.) and Spell Reflect targets shown at 35% opacity. Checkbox in General Settings (default: on).
-- **Spell Reflect detection** — Scans for known reflect buff IDs (Reflection, Magic Reflection, Fire/Arcane Reflect, Shadow/Frost Reflect, TurtleWoW Reflect Magic)
-- **Potent Venom** — Vial of Potent Venoms (45416) added as trackable consumable debuff
 
 ### v4.0.2 — March 2026
 

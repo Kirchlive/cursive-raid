@@ -17,6 +17,8 @@ local getn = table.getn
 local strfind = string.find
 local strlower = string.lower
 
+local GetTime = GetTime
+
 local filter = {
 }
 
@@ -61,18 +63,52 @@ local classRangeSpells = {
 }
 local rangeSpells = classRangeSpells[playerClass]
 
+-- v4.0.6: Range check cache — avoids redundant IsSpellInRange calls across
+-- ShouldDisplayGuid (10Hz x all GUIDs) AND BarUpdate (20Hz x displayed bars)
+local rangeCache = {}       -- guid -> { result = bool, expires = time }
+local RANGE_CACHE_TTL = 0.25 -- v4.0.6: 250ms TTL — balanced between perf and responsiveness
+
 filter.range = function(unit)
 	-- v4.0.5: TestOverlay GUIDs are always "in range"
 	if CursiveTestOverlay_IsTestGuid and CursiveTestOverlay_IsTestGuid(unit) then return true end
-	if IsSpellInRange and rangeSpells then
-		for i = 1, table.getn(rangeSpells) do
-			-- pcall: IsSpellInRange errors if spell is not in spellbook
-			local ok, result = pcall(IsSpellInRange, rangeSpells[i], unit)
-			if ok and result == 1 then return true end
-		end
-		-- All spells returned 0/nil/error — fall through to distance check
+
+	-- v4.0.6: Return cached result if fresh
+	local now = GetTime()
+	local cached = rangeCache[unit]
+	if cached and cached.expires > now then
+		return cached.result
 	end
-	return CheckInteractDistance(unit, 4) and true or false
+
+	local result = false
+	if IsSpellInRange and rangeSpells then
+		for i = 1, getn(rangeSpells) do
+			-- pcall: IsSpellInRange errors if spell is not in spellbook
+			local ok, inRange = pcall(IsSpellInRange, rangeSpells[i], unit)
+			if ok and inRange == 1 then
+				result = true
+				break
+			end
+		end
+	end
+	if not result then
+		result = CheckInteractDistance(unit, 4) and true or false
+	end
+
+	-- Store in cache
+	rangeCache[unit] = rangeCache[unit] or {}
+	rangeCache[unit].result = result
+	rangeCache[unit].expires = now + RANGE_CACHE_TTL
+	return result
+end
+
+-- v4.0.6: Periodic cache cleanup (called from main UI loop)
+filter.cleanRangeCache = function()
+	local now = GetTime()
+	for guid, entry in pairs(rangeCache) do
+		if entry.expires < now then
+			rangeCache[guid] = nil
+		end
+	end
 end
 
 filter.icon = function(unit)

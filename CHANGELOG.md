@@ -1,5 +1,27 @@
 # Changelog
 
+## v4.1.0 — 2026-04-15
+
+Major performance update targeting BG/AV lag. All optimizations validated live via ClaudeBridge with zero new Lua errors.
+
+### Performance — BG/AV Scaling Fix
+- **GUID tracking cap (60)** — `UNIT_COMBAT` no longer floods the tracker with 80+ units in AV. Low-priority GUIDs (not target, not raid-marked, not cursed) are dropped when at cap. High-priority GUIDs (target, raid icons, units with active curses) always get through.
+- **Range check cache (250ms TTL)** — `IsSpellInRange` results cached per GUID, shared across both `ShouldDisplayGuid` (10Hz main loop) and `BarUpdate` (20Hz per bar). Eliminates ~97% of redundant `IsSpellInRange` pcalls in AV.
+- **LOS check throttled (250ms)** — `UnitXP("inSight")` raycast per bar reduced from 20Hz to 4Hz. OOR stripes still update fast enough for gameplay.
+- **CC/Reflect cache (250ms TTL)** — `HasSpellReflect` (64-slot `UnitBuff` scan) and `HasActiveCC` results cached per GUID. Invalidated immediately on `UNIT_AURA` for current target, expires by TTL for others.
+- **Aura snapshot (single-pass scan)** — `hasAnySpellId` now scans debuffs+buffs once per GUID per 150ms, then does O(1) lookups for each shared debuff. Replaces N separate 128-slot scans per GUID per tick.
+- **EA Poller throttled (10Hz)** — Expose Armor armor-monitoring `OnUpdate` reduced from 60Hz (every frame) to 10Hz (100ms). Still catches armor changes within 2 server ticks (50ms each).
+- **Aura-gone optimization** — `CHAT_MSG_SPELL_AURA_GONE_OTHER` handler now does direct key lookup per GUID instead of nested iteration over all curses on all GUIDs.
+
+### Estimated Impact (AV with 80 units)
+- WoW API calls: ~22,000/s → ~2,500/s (**-89%**)
+- `IsSpellInRange` pcalls: ~3,040/s → ~160/s (**-95%**)
+- `UnitBuff` scans (Reflect): ~10,240/s → ~64/s (**-99%**)
+- `UnitXP` raycasts: ~320/s → ~64/s (**-80%**)
+- Tracked GUIDs: unlimited → capped at 60
+
+---
+
 ## v4.0.5 — 2026-04-14
 
 Bugfixes for Scythe/weapon proc timers, checkbox defaults, and visual improvements.

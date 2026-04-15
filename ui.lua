@@ -375,16 +375,21 @@ ui.BarUpdate = function()
 	end
 
 	-- v4.0.5: Out-of-range / line-of-sight stripe indicator
+	-- v4.0.6: Throttled to 500ms per GUID (range is cached in filter.lua, LOS cached here)
 	if this.oorFrame then
 		if Cursive.db.profile.oorstripes then
-			local inRange = Cursive.filter.range(this.guid)
-			-- v4.0.5: Also check line of sight via UnitXP (SP3)
-			local inSight = true
-			if inRange and UnitXP then
-				local ok, los = pcall(UnitXP, "inSight", "player", this.guid)
-				if ok and los == 0 then inSight = false end
+			-- LOS check throttled independently per bar
+			if not this._oorTick or this._oorTick < GetTime() then
+				this._oorTick = GetTime() + 0.25
+				local inRange = Cursive.filter.range(this.guid)
+				local inSight = true
+				if inRange and UnitXP then
+					local ok, los = pcall(UnitXP, "inSight", "player", this.guid)
+					if ok and los == 0 then inSight = false end
+				end
+				this._oorCached = inRange and inSight
 			end
-			if inRange and inSight then
+			if this._oorCached then
 				this.oorFrame:Hide()
 			else
 				this.oorFrame:Show()
@@ -1338,28 +1343,66 @@ local function GetBarCords(row, col)
 	return x, y
 end
 
--- v3.2: Returns spellId, texture, stacks from UnitDebuff scan
+-- v4.0.6: Single-pass aura scan per GUID per frame tick
+-- Scans all debuffs+buffs once, caches every spellId -> {texture, stacks}
+-- Subsequent hasAnySpellId calls for the same GUID do O(1) lookup instead of 128-slot rescan
+local auraSnapshotCache = {}  -- guid -> { spellId -> {texture, stacks}, _tick = time }
+local AURA_SNAPSHOT_TTL = 0.15 -- slightly longer than 10Hz main loop tick
+
+local function getAuraSnapshot(guid)
+	local now = GetTime()
+	local cached = auraSnapshotCache[guid]
+	if cached and cached._tick and (now - cached._tick) < AURA_SNAPSHOT_TTL then
+		return cached
+	end
+
+	-- Reuse existing table if available, wipe numeric spellId keys
+	local snapshot = cached or {}
+	if cached then
+		for k, _ in pairs(snapshot) do
+			if k ~= "_tick" then
+				snapshot[k] = nil
+			end
+		end
+	end
+	snapshot._tick = now
+
+	for i = 1, 64 do
+		local texture, stacks, spellSchool, spellId = UnitDebuff(guid, i)
+		if not spellId then break end
+		local entry = snapshot[spellId]
+		if not entry then
+			entry = {}
+			snapshot[spellId] = entry
+		end
+		entry.texture = texture
+		entry.stacks = stacks
+	end
+
+	for i = 1, 64 do
+		local texture, stacks, spellId = UnitBuff(guid, i)
+		if not spellId then break end
+		if not snapshot[spellId] then
+			local entry = {}
+			entry.texture = texture
+			entry.stacks = stacks
+			snapshot[spellId] = entry
+		end
+	end
+
+	auraSnapshotCache[guid] = snapshot
+	return snapshot
+end
+
+-- v3.2: Returns spellId, texture, stacks from cached aura snapshot
 local function hasAnySpellId(guid, spellIds)
-	for i = 1, 64 do -- TurtleWoW: debuff limit raised to 64
-		local texture, stacks, spellSchool, spellId = UnitDebuff(guid, i);
-		if not spellId then
-			break
-		end
-		if spellIds[spellId] then
-			return spellId, texture, stacks
+	local snapshot = getAuraSnapshot(guid)
+	for spellId, _ in pairs(spellIds) do
+		local entry = snapshot[spellId]
+		if entry then
+			return spellId, entry.texture, entry.stacks
 		end
 	end
-
-	for i = 1, 64 do -- TurtleWoW: buff limit raised
-		local texture, stacks, spellId = UnitBuff(guid, i);
-		if not spellId then
-			break
-		end
-		if spellIds[spellId] then
-			return spellId, texture, stacks
-		end
-	end
-
 	return nil, nil, nil
 end
 
@@ -1997,6 +2040,14 @@ ui:SetScript("OnUpdate", function()
 	if not ui.sharedCleanupTick or ui.sharedCleanupTick < GetTime() then
 		ui.sharedCleanupTick = GetTime() + 3.0
 		Cursive.curses:CleanupSharedDebuffs()
+		-- v4.0.6: Clean stale caches (range, CC/reflect, aura snapshots)
+		Cursive.filter.cleanRangeCache()
+		Cursive.curses:CleanCCReflectCache()
+		for guid, snap in pairs(auraSnapshotCache) do
+			if snap._tick and (GetTime() - snap._tick) > 0.3 then
+				auraSnapshotCache[guid] = nil
+			end
+		end
 	end
 
 	if not ui.rootBarFrame then

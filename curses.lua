@@ -528,11 +528,17 @@ end
 
 -- v3.2.1: OnUpdate poller for Expose Armor — polls armor every frame after EA cast
 -- This is more reliable than waiting for UNIT_AURA since armor changes may arrive late
+-- v4.0.6: EA Poller throttled from 60Hz (every frame) to 5Hz (200ms)
 if not CursiveEAPollerFrame then
 	CursiveEAPollerFrame = CreateFrame("Frame")
 	CursiveEAPollerFrame:Hide()
 	CursiveEAPollerFrame:SetScript("OnUpdate", function()
 		local now = GetTime()
+		-- v4.0.6: Throttle to 10Hz (100ms) — 2x server tick (50ms), catches EA within 1-2 ticks
+		-- EA Poller is short-lived (only active during EA monitoring window), so 10Hz is fine
+		if (this._tick or 0) > now then return end
+		this._tick = now + 0.1
+
 		for targetGuid, mon in pairs(Cursive.curses.armorMonitor) do
 			if mon.expectingEA and now <= mon.monitorUntil then
 				-- SuperWoW: no need to check current target, GUID works directly
@@ -892,9 +898,11 @@ Cursive:RegisterEvent("UNIT_AURA", function()
 	-- v4.0.4: Skip entirely when no targets are tracked (e.g. idle in city)
 	if not next(Cursive.core.guids) then return end
 	local a1 = arg1
+	-- v4.0.6: Invalidate CC/Reflect cache for any unit whose auras changed
 	if a1 == "target" then
 		local _, targetGuid = UnitExists("target")
 		if targetGuid then
+			curses:InvalidateCCReflectCache(targetGuid)
 			-- v4.0.4: Debounce aura scans (coalesce burst events within 50ms)
 			curses._pendingAuraGuid = targetGuid
 			if not curses._pendingAuraScan then
@@ -1334,24 +1342,24 @@ Cursive:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_OTHER", function(message)
 	if spellName and target then
 		spellName = curses:GetLowercaseSpellName(spellName)
 		if curses.trackedCurseNamesToTextures[spellName] then
-			-- loop through targets with active curses
+			-- v4.0.6: Only iterate GUIDs that actually have this curse tracked
+			-- (avoids O(N) full scan + 128-slot UnitDebuff per GUID in AV)
 			for guid, data in pairs(curses.guids) do
-				for curseName, curseData in pairs(data) do
-					if curseName == spellName then
-						-- see if target still has that curse
-						if not curses:ScanGuidForCurse(guid, curseData.spellID) then
-							-- v4.0.3: Eye of Dormant Corruption extends duration beyond server debuff
-							-- Don't remove if trinket bonus time is still remaining
-							local keepForTrinket = false
-							if curses.hasEyeOfDormantCorruption and curseData.eyeExtended then
-								local rawRemaining = curses:TimeRemainingRaw(curseData)
-								if rawRemaining > 0.5 then
-									keepForTrinket = true
-								end
+				local curseData = data[spellName]
+				if curseData then
+					-- see if target still has that curse
+					if not curses:ScanGuidForCurse(guid, curseData.spellID) then
+						-- v4.0.3: Eye of Dormant Corruption extends duration beyond server debuff
+						-- Don't remove if trinket bonus time is still remaining
+						local keepForTrinket = false
+						if curses.hasEyeOfDormantCorruption and curseData.eyeExtended then
+							local rawRemaining = curses:TimeRemainingRaw(curseData)
+							if rawRemaining > 0.5 then
+								keepForTrinket = true
 							end
-							if not keepForTrinket then
-								curses:RemoveCurse(guid, curseName)
-							end
+						end
+						if not keepForTrinket then
+							curses:RemoveCurse(guid, spellName)
 						end
 					end
 				end
@@ -1636,46 +1644,90 @@ curses.reflectBuffIds = {
 
 -- v3.2.2: Check if a GUID has any active CC debuff (banish, polymorph, etc.)
 -- Returns true if at least one tracked debuff with category "cc" is active
-function curses:HasActiveCC(guid)
-	local guidCurses = curses.guids[guid]
-	if not guidCurses then return false end
+-- v4.0.6: Cached CC/Reflect lookups — avoids 64-slot UnitBuff scans per bar per tick
+-- Cache is invalidated per-GUID on UNIT_AURA and expires after 500ms as safety net
+local ccCache = {}       -- guid -> { result = bool, expires = time }
+local reflectCache = {}  -- guid -> { result = school|nil, expires = time }
+local CC_REFLECT_CACHE_TTL = 0.25 -- v4.0.6: 250ms — 5x server tick, snappy enough for visual feedback
 
-	for curseName, curseData in pairs(guidCurses) do
-		if curseData.spellID then
-			local debuffKey = curses.sharedDebuffSpellLookup[curseData.spellID]
-			if debuffKey then
-				local meta = curses.sharedDebuffMeta[debuffKey]
-				if meta and meta.category == "cc" then
-					-- Check if still active (not expired)
-					local remaining = curses:TimeRemaining(curseData)
-					if remaining and remaining > 0 then
-						return true
+function curses:InvalidateCCReflectCache(guid)
+	if guid then
+		ccCache[guid] = nil
+		reflectCache[guid] = nil
+	end
+end
+
+function curses:CleanCCReflectCache()
+	local now = GetTime()
+	for guid, entry in pairs(ccCache) do
+		if entry.expires < now then ccCache[guid] = nil end
+	end
+	for guid, entry in pairs(reflectCache) do
+		if entry.expires < now then reflectCache[guid] = nil end
+	end
+end
+
+function curses:HasActiveCC(guid)
+	local now = GetTime()
+	local cached = ccCache[guid]
+	if cached and cached.expires > now then
+		return cached.result
+	end
+
+	local result = false
+	local guidCurses = curses.guids[guid]
+	if guidCurses then
+		for curseName, curseData in pairs(guidCurses) do
+			if curseData.spellID then
+				local debuffKey = curses.sharedDebuffSpellLookup[curseData.spellID]
+				if debuffKey then
+					local meta = curses.sharedDebuffMeta[debuffKey]
+					if meta and meta.category == "cc" then
+						local remaining = curses:TimeRemaining(curseData)
+						if remaining and remaining > 0 then
+							result = true
+							break
+						end
 					end
 				end
 			end
 		end
 	end
 
-	return false
+	ccCache[guid] = ccCache[guid] or {}
+	ccCache[guid].result = result
+	ccCache[guid].expires = now + CC_REFLECT_CACHE_TTL
+	return result
 end
 
 -- v3.2.2: Check if a GUID has an active Spell Reflect buff
--- Scans UnitBuff for known reflect spell IDs (requires SuperWoW for spellID)
+-- v4.0.6: Cached — avoids 64-slot UnitBuff scan per bar per 100ms tick
 function curses:HasSpellReflect(guid)
 	-- v4.0.5: TestOverlay GUIDs have no reflect
 	if CursiveTestOverlay_IsTestGuid and CursiveTestOverlay_IsTestGuid(guid) then return nil end
 	if not UnitExists(guid) then return nil end
 
+	local now = GetTime()
+	local cached = reflectCache[guid]
+	if cached and cached.expires > now then
+		return cached.result
+	end
+
+	local result = nil
 	for i = 1, 64 do
 		local _, _, spellID = UnitBuff(guid, i)
 		if not spellID then break end
 		local school = curses.reflectBuffIds[spellID]
 		if school then
-			return school
+			result = school
+			break
 		end
 	end
 
-	return nil
+	reflectCache[guid] = reflectCache[guid] or {}
+	reflectCache[guid].result = result
+	reflectCache[guid].expires = now + CC_REFLECT_CACHE_TTL
+	return result
 end
 
 Cursive.curses = curses
