@@ -63,9 +63,27 @@ local classRangeSpells = {
 }
 local rangeSpells = classRangeSpells[playerClass]
 
--- v4.0.6: Range check cache — avoids redundant IsSpellInRange calls across
+-- v4.1.3: Max spell-range per class (base + best talent) for OOR-stripes. This is
+-- a DIFFERENT semantic from filter.range (which is 120y for "Within Range" filter).
+-- IsSpellInRange is unreliable for non-target GUIDs (returns 1 even at 600+ yards
+-- when called on a GUID that's not the current target), so we use UnitXP distanceBetween.
+local classMaxSpellRange = {
+	WARLOCK = 42,   -- Corruption 30y + Grim Reach 40%
+	MAGE    = 41,   -- Frostbolt 30y + Arctic Reach 33% / Magic Attunement
+	PRIEST  = 40,   -- Shadow Word: Pain 30y + Shadow Reach 33%
+	DRUID   = 35,   -- Moonfire 25y + Nature's Reach 40%
+	HUNTER  = 41,   -- Auto Shot 35y + Hawk Eye 17%
+	SHAMAN  = 30,   -- Lightning Bolt 30y
+	PALADIN = 30,   -- Judgement 30y
+	WARRIOR = 10,   -- Melee — unlikely to use Cursive for tracking
+	ROGUE   = 10,   -- Melee
+}
+local MAX_SPELL_RANGE = classMaxSpellRange[playerClass] or 40
+
+-- v4.0.6: Range check cache — avoids redundant calls across
 -- ShouldDisplayGuid (10Hz x all GUIDs) AND BarUpdate (20Hz x displayed bars)
-local rangeCache = {}       -- guid -> { result = bool, expires = time }
+local rangeCache = {}       -- guid -> { result = bool, expires = time }  — 120y filter
+local spellRangeCache = {}  -- v4.1.3: separate cache for spell-range stripes (class max)
 local RANGE_CACHE_TTL = 0.25 -- v4.0.6: 250ms TTL — balanced between perf and responsiveness
 
 filter.range = function(unit)
@@ -122,12 +140,54 @@ filter.range = function(unit)
 	return result
 end
 
+-- v4.1.3: Spell-range check for OOR-stripe rendering (not the "Within Range"
+-- filter, which uses filter.range at 120y). Uses UnitXP distanceBetween against
+-- a class-specific max spell range. Rationale: IsSpellInRange is unreliable for
+-- non-target GUIDs (verified 2026-04-17: returns 1 at 686y for passive-acquired
+-- GUIDs), so the pre-v4.1.2 stripe logic effectively never showed stripes for
+-- those units. distanceBetween gives the real yard value and lets us use the
+-- player class's talent-accounted max range as the threshold.
+filter.inSpellRange = function(unit)
+	-- TestOverlay override — same gate as filter.range
+	if type(unit) == "string" and strfind(unit, "CURSIVE_TEST_", 1, true) then
+		if CursiveTestOverlay_IsOutOfRange and CursiveTestOverlay_IsOutOfRange(unit) then
+			return false
+		end
+		return true
+	end
+
+	local now = GetTime()
+	local cached = spellRangeCache[unit]
+	if cached and cached.expires > now then
+		return cached.result
+	end
+
+	local result = false
+	if UnitXP then
+		local ok, dist = pcall(UnitXP, "distanceBetween", "player", unit)
+		if ok and type(dist) == "number" then
+			result = dist <= MAX_SPELL_RANGE
+		end
+	end
+
+	spellRangeCache[unit] = spellRangeCache[unit] or {}
+	spellRangeCache[unit].result = result
+	spellRangeCache[unit].expires = now + RANGE_CACHE_TTL
+	return result
+end
+
 -- v4.0.6: Periodic cache cleanup (called from main UI loop)
+-- v4.1.3: Also clean spellRangeCache
 filter.cleanRangeCache = function()
 	local now = GetTime()
 	for guid, entry in pairs(rangeCache) do
 		if entry.expires < now then
 			rangeCache[guid] = nil
+		end
+	end
+	for guid, entry in pairs(spellRangeCache) do
+		if entry.expires < now then
+			spellRangeCache[guid] = nil
 		end
 	end
 end

@@ -388,7 +388,12 @@ ui.BarUpdate = function()
 			-- LOS check throttled independently per bar
 			if not this._oorTick or this._oorTick < GetTime() then
 				this._oorTick = GetTime() + 0.25
-				local inRange = Cursive.filter.range(this.guid)
+				-- v4.1.3: OOR stripes use SPELL-range (class max with talent buffer),
+				-- not filter.range (which is 120y for the "Within Range" filter).
+				-- These are distinct semantics: filter.range decides whether the mob
+				-- appears at all when the filter is on; stripes tell you whether you
+				-- can actually cast on it right now.
+				local inRange = Cursive.filter.inSpellRange(this.guid)
 				local inSight = true
 				-- v4.1.1: TestOverlay LoS override (nil = no override, real API runs)
 				if CursiveTestOverlay_IsBlockedLoS and CursiveTestOverlay_IsBlockedLoS(this.guid) then
