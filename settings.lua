@@ -759,12 +759,12 @@ local raidDisplayNames = {
 	huntersmark = "Hunter's Mark |cFFAAD372(Hunter)|r",
 	giftofarthas = "Gift of Arthas |cFFFFFFFF(Item)|r",
 	potentvenom = "Potent Venom |cFFFFFFFF(Vial of Potent Venoms)|r",
-	scytheholy = "Elune's Radiance |cFFFFFFFF(Holy Scythe)|r",
-	scytheshadow = "Elune's Twilight |cFFFFFFFF(Shadow Scythe)|r",
-	scythefire = "Elune's Rage |cFFFFFFFF(Fire Scythe)|r",
-	scythearcane = "Elune's Wrath |cFFFFFFFF(Arcane Scythe)|r",
-	scythenature = "Elune's Grace |cFFFFFFFF(Nature Scythe)|r",
-	scythefrost = "Elune's Ire |cFFFFFFFF(Frost Scythe)|r",
+	scytheholy = "Elune's Radiance |cFF808080(Holy Scythe)|r",
+	scytheshadow = "Elune's Twilight |cFF808080(Shadow Scythe)|r",
+	scythefire = "Elune's Rage |cFF808080(Fire Scythe)|r",
+	scythearcane = "Elune's Wrath |cFF808080(Arcane Scythe)|r",
+	scythenature = "Elune's Grace |cFF808080(Nature Scythe)|r",
+	scythefrost = "Elune's Ire |cFF808080(Frost Scythe)|r",
 }
 
 -- v3.2: Detailed tooltip descriptions for each debuff
