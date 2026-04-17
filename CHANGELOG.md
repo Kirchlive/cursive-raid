@@ -1,5 +1,24 @@
 # Changelog
 
+## v4.1.2 — 2026-04-17
+
+Follow-up hotfix for three issues surfaced during v4.1.1 live validation.
+
+### Bug Fixes
+- **Targets disappeared at standstill (core.lua:93, regression from v4.1.1)** — the new `evictStale()` function used a 30-second TTL-based removal. Standing still meant no new UNIT_COMBAT events fired, GUID timestamps aged, and mobs still physically visible were silently removed from the list. Fix: evict based on `UnitExists(guid)` (SuperWoW GUID-based lookup) instead of elapsed time. A mob that's still in server-range keeps returning `exists=true` regardless of whether events fire. The 5-minute LRU_TTL stays as a safety-valve for edge cases where UnitExists lies. Resolves the "list goes empty after a few seconds of standing still" symptom.
+- **Name Length slider had no effect (ui.lua:414)** — `nameText:SetWidth()` was only called once in `CreateBar` (ui.lua:1005, 1120). The slider wrote the new value to `Cursive.db.profile.namelength` but `BarUpdate` only set the text, never updated the widget width. Changing the slider required `/reload` to see any effect. Fix: apply `SetWidth` on each `BarUpdate` with a `_lastMaxW` cache-guard so the call only runs when the value actually changed.
+
+### Semantics Change
+- **"Within Range" is now a fixed 120-yard radius** (filter.lua:91) — previously the filter used `IsSpellInRange` against class-specific spells (~30-42 yards for Warlock, varied per class) which made the label misleading. New primary path uses `UnitXP("distanceBetween", "player", guid) <= 120`. When the filter is disabled, all `UnitExists`-trackable units are shown (server-range ~300 yards). The old spell-range logic remains as a fallback when `UnitXP` is unavailable. Tooltip updated to "Only show units within 120 yards (when disabled, all API-trackable units are shown)". No migration needed — existing `filterrange` DB flag is reused.
+
+### Live Verification
+All fixes validated 2026-04-17 via ClaudeBridge:
+- `UnitXP("distanceBetween", "player", "player")` returns `0` as expected (API confirmed)
+- Standing still for 60s+ no longer empties the list (mobs remain as long as `UnitExists` returns true)
+- Name Length slider change applies within one `BarUpdate` tick (no `/reload` needed)
+
+---
+
 ## v4.1.1 — 2026-04-17
 
 Hotfix for three regressions observed during the 2026-04-16 Naxx raid, plus TestOverlay modernization so future regressions in CC/Reflect/OOR/LoS paths are catchable in isolation.

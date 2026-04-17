@@ -2785,7 +2785,7 @@ _, y = CreateRow(filtChild, "CursiveOptFilterNotPlayer", y, "Not Player", "check
     { tooltipText = "Only show NON player units" })
 
 _, y = CreateRow(filtChild, "CursiveOptFilterRange", y, "Within Range", "checkbox", "filterrange",
-    { tooltipText = "Only show units within range" })
+    { tooltipText = "Only show units within 120 yards (when disabled, all API-trackable units are shown)" })
 
 _, y = CreateRow(filtChild, "CursiveOptFilterRaidMark", y, "Has Raid Mark", "checkbox", "filterraidmark",
     { tooltipText = "Only show units with raid marks" })

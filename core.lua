@@ -27,8 +27,11 @@ Cursive.core._guidCount = 0
 -- v4.0.6: GUID cap to prevent O(N) explosion in BGs (AV = 80+ units)
 local GUID_CAP = 60
 
--- v4.1.1: LRU TTL for stale-GUID eviction (seconds without refresh).
-local LRU_TTL = 30
+-- v4.1.2: Long-TTL safety-valve (seconds). Primary stale-check is UnitExists-based
+-- in evictStale(); this TTL only catches edge cases where UnitExists lies.
+-- Raised from 30s (v4.1.1) → 300s because the old TTL removed mobs that were
+-- still visible just because no UNIT_COMBAT event fired (regression at standstill).
+local LRU_TTL = 300
 
 -- v4.0.6: Check if GUID is high-priority (target, raid-marked, or has our curses)
 -- v4.1.1: Moved above add() so both add() and addGuid() can enforce the cap.
@@ -87,16 +90,23 @@ Cursive.core.remove = function(guid)
 	end
 end
 
--- v4.1.1: LRU evict stale non-priority GUIDs (>LRU_TTL seconds without refresh).
--- Complements the relaxed UNIT_COMBAT acquisition path: keeps _guidCount healthy
--- so legitimate new GUIDs can always enter when the cap is near-full.
+-- v4.1.2: Evict non-priority GUIDs. Primary check is UnitExists(guid) which
+-- uses SuperWoW's GUID-based lookup — a mob that's physically gone from the
+-- server-range will return false. The 30s TTL from v4.1.1 was wrong: it
+-- removed mobs that were still visible just because no UNIT_COMBAT event
+-- fired to refresh the timestamp (Rob's standstill regression).
+-- LRU_TTL (5 min) remains as a safety-valve for edge cases where UnitExists lies.
 Cursive.core.evictStale = function()
 	local now = GetTime()
 	for guid, lastSeen in pairs(Cursive.core.guids) do
-		if (now - lastSeen) > LRU_TTL and not isHighPriorityGuid(guid) then
-			Cursive.core.guids[guid] = nil
-			Cursive.core._guidCount = Cursive.core._guidCount - 1
-			if Cursive.core._guidCount < 0 then Cursive.core._guidCount = 0 end
+		if not isHighPriorityGuid(guid) then
+			local exists = UnitExists(guid)
+			local dead = exists and UnitIsDead(guid)
+			if (not exists) or dead or ((now - lastSeen) > LRU_TTL) then
+				Cursive.core.guids[guid] = nil
+				Cursive.core._guidCount = Cursive.core._guidCount - 1
+				if Cursive.core._guidCount < 0 then Cursive.core._guidCount = 0 end
+			end
 		end
 	end
 end

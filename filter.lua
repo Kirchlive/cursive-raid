@@ -88,8 +88,20 @@ filter.range = function(unit)
 		return cached.result
 	end
 
+	-- v4.1.2: Primary path — UnitXP("distanceBetween") gives precise yards.
+	-- "Within Range" now means a fixed 120-yard radius, not class-spell-range
+	-- (~30-42y). When this filter is disabled (ShouldDisplayGuid skips the call),
+	-- all UnitExists-trackable targets are shown (server-range ~300y).
 	local result = false
-	if IsSpellInRange and rangeSpells then
+	if UnitXP then
+		local ok, dist = pcall(UnitXP, "distanceBetween", "player", unit)
+		if ok and type(dist) == "number" then
+			result = dist <= 120
+		end
+	end
+
+	-- Fallback path (UnitXP unavailable or returned nil): IsSpellInRange + CheckInteractDistance
+	if not result and IsSpellInRange and rangeSpells then
 		for i = 1, getn(rangeSpells) do
 			-- pcall: IsSpellInRange errors if spell is not in spellbook
 			local ok, inRange = pcall(IsSpellInRange, rangeSpells[i], unit)
@@ -98,9 +110,9 @@ filter.range = function(unit)
 				break
 			end
 		end
-	end
-	if not result then
-		result = CheckInteractDistance(unit, 4) and true or false
+		if not result then
+			result = CheckInteractDistance(unit, 4) and true or false
+		end
 	end
 
 	-- Store in cache

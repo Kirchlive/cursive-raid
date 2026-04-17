@@ -412,6 +412,14 @@ ui.BarUpdate = function()
 	-- update caption text
 	local name = UnitName(this.guid)
 	if name and this.nameText then
+		-- v4.1.2 FIX: SetWidth was only called at CreateBar, so the "Name Length"
+		-- slider had no visual effect without /reload. Apply width on each update,
+		-- cached to avoid redundant SetWidth calls.
+		local newMaxW = Cursive.db.profile.namelength or 80
+		if this.nameText._lastMaxW ~= newMaxW then
+			this.nameText:SetWidth(newMaxW)
+			this.nameText._lastMaxW = newMaxW
+		end
 		this.nameText:SetText(name)
 	end
 
