@@ -1,5 +1,40 @@
 # Changelog
 
+## v4.1.1 — 2026-04-17
+
+Hotfix for three regressions observed during the 2026-04-16 Naxx raid, plus TestOverlay modernization so future regressions in CC/Reflect/OOR/LoS paths are catchable in isolation.
+
+### Bug Fixes
+- **Target tracking broken in v4.1.0 (Bug #1)** — `UNIT_COMBAT` delivers a unit token (e.g. `"raid5target"`) in `arg1`, not a GUID. The v4.0.6 `0x`-prefix guard in `addGuid()` silently rejected every token, making UNIT_COMBAT a dead passive-acquisition path. Symptoms: mobs only appeared after being actively targeted; one guild member had a completely empty Cursive list until he manually clicked each mob. Fix: `core.lua` OnEvent dispatcher now routes UNIT_COMBAT through `add(token)` which resolves the token via `UnitExists()`. `add()` also gained the same GUID-cap check that `addGuid()` already had to prevent cap bypass.
+- **LoS check permanently true (Bug #2)** — `UnitXP("inSight", ...)` returns a **boolean** (`true`/`false`), not a number. `ui.lua` checked `if ok and los == 0 then inSight = false end` — but `false == 0` is never true in Lua, so `inSight` stayed `true` regardless of actual line-of-sight state. Mobs behind walls/pillars showed no OOR stripes. Additionally: LoS check was gated by `inRange` — a target behind a wall IN range was never detected as LoS-blocked. Fix: changed the check to `los == false` and decoupled LoS from inRange. Live-verified return type via ClaudeBridge on 2026-04-17.
+- **Raid-mark filter bypass (Bug #3)** — `filter.lua:192` had an unconditional early-return `return true` for any raid-icon + attackable unit, overriding Combat/Range/Hostile filters regardless of the `filterraidmark` toggle. Symptom: an OOC boss with a stale Skull mark stayed visible even when "In Combat" filter was active. Fix: bypass now applies only when the `filterraidmark` checkbox is explicitly enabled. **Migration note:** users who relied on the old implicit "marked mobs always show" behavior must now enable the "Has Raid Mark" filter toggle to restore prior behavior.
+
+### Stability
+- **LRU evict for stale GUIDs** — Added `Cursive.core.evictStale()` running at 2Hz from the core frame's OnUpdate. Drops non-priority GUIDs (not target, not raid-marked, not cursed) that have not been refreshed for 30s. Keeps `_guidCount` healthy so legitimate new mobs can always enter when the cap is near-full. Complements the relaxed UNIT_COMBAT acquisition path.
+- **Broken "?" debuff icons (ui.lua:1696)** — render priority chain locked in the "INV_Misc_QuestionMark" fallback texture for spells the player doesn't know (Hand of Reckoning, cross-class judgements etc.), ignoring the valid `sharedTexture` from the debuff data. Happens when a third-party addon (e.g. SuperCleveRoidMacros/CursiveCustomSpells) injects entries into `trackedCurseIds` with `texture = "?"` after LoadCurses. Fix: skip the cached texture in the render chain when it's the "?" fallback. Now falls through to `sharedTexture` → `SpellInfo` → live scan → fallback (correct behavior).
+- **"?" texture cached by Cursive itself (curses.lua:283)** — if `SpellInfo(id)` returned "?" directly (some client/DLL combinations do this instead of nil for unknown spells), the init loop cached it permanently. Fix: treat a "?" return from `SpellInfo` as nil, letting downstream fallbacks try other sources.
+- **TestOverlay "Unknown unit name" errors (filter.lua:100)** — regression introduced when the test-GUID gate was switched to `CursiveTestOverlay_IsTestGuid` (state-dependent on `testActive`). Stale test-GUIDs observed by callers during Enable/Disable transitions fell through to `CheckInteractDistance()` and errored. Fix: gate on string prefix `strfind(unit, "CURSIVE_TEST_", 1, true)` — state-independent.
+
+### TestOverlay Consolidation
+Reduced from 14 targets to **8 targets**, each with a unique raid icon (1-8) so they always fit the default `maxrow=8`. Every Cursive feature still covered:
+
+| ID | Name | Icon | Exercise |
+|----|------|------|----------|
+| 001 | Raid Boss | Skull | Shared debuffs + own DoTs (mixed ownership) |
+| 002 | Scythe Dummy | Cross | All 6 Scythe-of-Elune procs |
+| 003 | Elite Tank Target | Square | Stacked debuffs (Expose/Fire/Shadow/Winter all 5x) |
+| 004 | Weapon Proc Dummy | Triangle | Weapon/trinket procs (Armor Shatter, Puncture Armor, Spell Vuln, Thunderfury) |
+| 005 | CC'd Add | Diamond | CC transparency (`HasActiveCC` → α 0.35) |
+| 006 | Reflector | Circle | Spell Reflect (`HasSpellReflect` → red overlay + school label) |
+| 007 | OOR Test | Moon | Out-of-range stripes (`filter.range` override) |
+| 008 | LoS Block | Star | Line-of-sight stripes (`UnitXP("inSight")` override) |
+
+**Feature mocks**: `CursiveTestOverlay_HasActiveCC`, `HasSpellReflect`, `IsOutOfRange`, `IsBlockedLoS` — all return `nil` for real GUIDs, `true/false`/school-string for test GUIDs, so call-sites use `if mock ~= nil then return mock end` to distinguish override from no-override.
+
+**TestOverlay ownDots filter** — class-own DoT injection (via `trackedCurseIds`) now skips spells whose `SpellInfo` returns nil or the "?" fallback, preventing broken icons on test targets for spells the player doesn't know.
+
+---
+
 ## v4.1.0 — 2026-04-15
 
 Major performance update targeting BG/AV lag. All optimizations validated live via ClaudeBridge with zero new Lua errors.

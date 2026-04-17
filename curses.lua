@@ -277,6 +277,14 @@ function curses:LoadCurses()
 	for id, data in pairs(curses.trackedCurseIds) do
 		-- get the texture
 		local name, rank, texture = SpellInfo(id)
+		-- v4.1.1 FIX: Do not cache the "?" fallback texture for spells the player
+		-- doesn't know (cross-class spells where SpellInfo resolves to the question-mark
+		-- icon). Leaving it nil lets the render chain fall through to curseData.sharedTexture
+		-- or a live scan — never lock in a broken icon for a spell that has a valid
+		-- texture available from another source.
+		if texture and string.find(texture, "INV_Misc_QuestionMark", 1, true) then
+			texture = nil
+		end
 		-- update trackedCurseNamesToTextures
 		curses.trackedCurseNamesToTextures[data.name] = texture
 		-- update trackedCurseIds
@@ -1668,6 +1676,12 @@ function curses:CleanCCReflectCache()
 end
 
 function curses:HasActiveCC(guid)
+	-- v4.1.1: TestOverlay CC mock (nil = no override, real logic runs)
+	if CursiveTestOverlay_HasActiveCC then
+		local mock = CursiveTestOverlay_HasActiveCC(guid)
+		if mock ~= nil then return mock end
+	end
+
 	local now = GetTime()
 	local cached = ccCache[guid]
 	if cached and cached.expires > now then
@@ -1703,8 +1717,16 @@ end
 -- v3.2.2: Check if a GUID has an active Spell Reflect buff
 -- v4.0.6: Cached — avoids 64-slot UnitBuff scan per bar per 100ms tick
 function curses:HasSpellReflect(guid)
-	-- v4.0.5: TestOverlay GUIDs have no reflect
-	if CursiveTestOverlay_IsTestGuid and CursiveTestOverlay_IsTestGuid(guid) then return nil end
+	-- v4.1.1: TestOverlay Reflect mock — returns school-string, false (test GUID w/o reflect),
+	-- or nil (not a test GUID, run real UnitBuff scan). Replaces the v4.0.5 blanket-nil
+	-- return so test target 012 "Reflector" can exercise the reflect overlay.
+	if CursiveTestOverlay_HasSpellReflect then
+		local mock = CursiveTestOverlay_HasSpellReflect(guid)
+		if mock ~= nil then
+			if mock == false then return nil end
+			return mock
+		end
+	end
 	if not UnitExists(guid) then return nil end
 
 	local now = GetTime()

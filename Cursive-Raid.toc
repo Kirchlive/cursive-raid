@@ -1,9 +1,9 @@
 ## Interface: 11200
-## Title: Cursive Raid v4.1.0
-## Title-zhCN: Cursive Raid v4.1.0
+## Title: Cursive Raid v4.1.1
+## Title-zhCN: Cursive Raid v4.1.1
 ## Author: Kirchlive, Teto
 ## Notes: Raid debuff tracker with profiles, armor display, debuff order & multi-curse assist (SuperWoW required)
-## Version: 4.1.0
+## Version: 4.1.1
 ## SavedVariablesPerCharacter: CursiveDB
 ## SavedVariables: CursiveProfiles
 ## X-Embeds: Ace2, FuBarPlugin-2.0, CompostLib, DewDropLib, TabletLib

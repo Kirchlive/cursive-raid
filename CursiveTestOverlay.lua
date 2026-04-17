@@ -47,8 +47,10 @@ local ownDebuffsByClass = {
     paladin = {},
 }
 
--- 8 test targets with varying HP, names, raid icons
--- own debuffs are injected dynamically based on player class
+-- v4.1.1: Consolidated to 8 targets, each with a unique raid icon for guaranteed
+-- top-8 visibility at default maxrow=8. Covers every Cursive feature: shared debuffs,
+-- stacked debuffs, Scythe procs, weapon procs, CC transparency, Spell Reflect,
+-- OOR stripes, and LoS stripes. Own class DoTs inject into all targets via ownSlots.
 local testTargets = {
     {
         id = "001", name = "Raid Boss",
@@ -59,78 +61,82 @@ local testTargets = {
             { key = "shadowvulnerability", stacks = 0, elapsed = 2 },
             { key = "thunderfury", stacks = 0, elapsed = 5 },
         },
-        ownSlots = 3, -- how many own debuffs to add from class list
+        ownSlots = 3, -- mixed shared + own for main boss scenario
     },
     {
-        id = "002", name = "Boss Add",
+        id = "002", name = "Scythe Dummy",
         hp = 82, maxHp = 1650000, raidIcon = 7, -- Cross
         debuffs = {
-            { key = "sunderarmor", stacks = 3, elapsed = 9 },
-            { key = "curseoftheelements", stacks = 0, elapsed = 20 },
-            { key = "winterschill", stacks = 3, elapsed = 4 },
+            -- All 6 Scythe-of-Elune procs staggered
+            { key = "scytheholy",   stacks = 0, elapsed = 1 },
+            { key = "scytheshadow", stacks = 0, elapsed = 3 },
+            { key = "scythefire",   stacks = 0, elapsed = 5 },
+            { key = "scythearcane", stacks = 0, elapsed = 6 },
+            { key = "scythenature", stacks = 0, elapsed = 8 },
+            { key = "scythefrost",  stacks = 0, elapsed = 9 },
+            { key = "sunderarmor",  stacks = 3, elapsed = 2 },
         },
-        ownSlots = 2,
+        ownSlots = 1,
     },
     {
-        id = "003", name = "Elite Add",
+        id = "003", name = "Elite Tank Target",
         hp = 65, maxHp = 2400000, raidIcon = 6, -- Square
         debuffs = {
-            { key = "exposearmor", stacks = 5, elapsed = 3 },
-            { key = "firevulnerability", stacks = 5, elapsed = 6 },
-            { key = "shadowweaving", stacks = 5, elapsed = 1 },
-            { key = "curseofshadow", stacks = 0, elapsed = 55 },
+            -- Stacked debuff showcase
+            { key = "exposearmor",         stacks = 5, elapsed = 3 },
+            { key = "firevulnerability",   stacks = 5, elapsed = 6 },
+            { key = "shadowweaving",       stacks = 5, elapsed = 1 },
+            { key = "winterschill",        stacks = 5, elapsed = 4 },
         },
         ownSlots = 2,
     },
     {
-        id = "004", name = "Dragon",
+        id = "004", name = "Weapon Proc Dummy",
         hp = 45, maxHp = 3100000, raidIcon = 4, -- Triangle
         debuffs = {
-            { key = "sunderarmor", stacks = 5, elapsed = 2 },
-            { key = "faeriefire", stacks = 0, elapsed = 30 },
-            { key = "armorshatter", stacks = 3, elapsed = 10 },
+            -- Weapon/trinket proc showcase
+            { key = "armorshatter",      stacks = 3, elapsed = 10 },
             { key = "spellvulnerability", stacks = 0, elapsed = 1 },
-            { key = "curseofrecklessness", stacks = 0, elapsed = 35 },
+            { key = "puncturearmor",     stacks = 5, elapsed = 4 },
+            { key = "thunderfury",       stacks = 0, elapsed = 2 },
         },
         ownSlots = 1,
     },
     {
-        id = "005", name = "Trash Mob",
-        hp = 28, maxHp = 520000, raidIcon = 3, -- Diamond
+        id = "005", name = "CC'd Add",
+        hp = 85, maxHp = 650000, raidIcon = 3, -- Diamond
         debuffs = {
-            { key = "sunderarmor", stacks = 4, elapsed = 7 },
-            { key = "thunderfury", stacks = 0, elapsed = 3 },
+            { key = "sunderarmor", stacks = 1, elapsed = 5 },
         },
-        ownSlots = 1,
+        ownSlots = 2,
+        hasCC = true, -- v4.1.1: exercises HasActiveCC → unitFrame alpha 0.35
     },
     {
-        id = "006", name = "Raid Boss 2",
-        hp = 12, maxHp = 3300000, raidIcon = 2, -- Circle
+        id = "006", name = "Reflector",
+        hp = 60, maxHp = 800000, raidIcon = 2, -- Circle
         debuffs = {
-            { key = "sunderarmor", stacks = 5, elapsed = 1 },
-            { key = "exposearmor", stacks = 3, elapsed = 12 },
-            { key = "firevulnerability", stacks = 5, elapsed = 2 },
-            { key = "winterschill", stacks = 5, elapsed = 3 },
-            { key = "shadowweaving", stacks = 5, elapsed = 5 },
-            { key = "shadowvulnerability", stacks = 0, elapsed = 1 },
+            { key = "faeriefire", stacks = 0, elapsed = 8 },
         },
         ownSlots = 1,
+        reflectSchool = "Shadow/Frost", -- v4.1.1: exercises HasSpellReflect → red overlay + label
     },
     {
-        id = "007", name = "Non-Elite",
-        hp = 5, maxHp = 18000, raidIcon = nil,
+        id = "007", name = "OOR Test",
+        hp = 75, maxHp = 500000, raidIcon = 5, -- Moon
         debuffs = {
-            { key = "sunderarmor", stacks = 2, elapsed = 14 },
+            { key = "sunderarmor", stacks = 3, elapsed = 7 },
         },
         ownSlots = 1,
+        outOfRange = true, -- v4.1.1: exercises filter.range override → OOR stripes
     },
     {
-        id = "008", name = "Patrol Add",
-        hp = 38, maxHp = 95000, raidIcon = nil,
+        id = "008", name = "LoS Block",
+        hp = 45, maxHp = 750000, raidIcon = 1, -- Star
         debuffs = {
-            { key = "faeriefire", stacks = 0, elapsed = 18 },
+            { key = "curseofshadow", stacks = 0, elapsed = 30 },
         },
         ownSlots = 1,
+        losBlocked = true, -- v4.1.1: exercises UnitXP("InSight") override → LoS stripes
     },
 }
 
@@ -167,6 +173,11 @@ function CursiveTestOverlay_Enable()
             hp = math.floor(t.maxHp * t.hp / 100),
             maxHp = t.maxHp,
             raidIcon = t.raidIcon,
+            -- v4.1.1: feature-test flags (nil unless explicitly set on the target)
+            hasCC = t.hasCC,
+            reflectSchool = t.reflectSchool,
+            outOfRange = t.outOfRange,
+            losBlocked = t.losBlocked,
         }
 
         -- Register in core.guids (makes them renderable)
@@ -256,6 +267,8 @@ function CursiveTestOverlay_Enable()
 
     -- v3.2.1 FIX: Inject own class DoTs (from trackedCurseIds, NOT shared debuffs)
     -- These are the player's own spells (Corruption, Immolate, CoA etc.)
+    -- v4.1.1 FIX: Skip spells the player doesn't know — SpellInfo returns nil or "?"
+    -- for cross-class spell IDs, which would render as broken "?" icons on test targets.
     local ownDotsAdded = 0
     if curses.trackedCurseIds then
         -- Collect unique spell names to avoid duplicates (multiple ranks)
@@ -263,24 +276,27 @@ function CursiveTestOverlay_Enable()
         local ownDots = {}
         for spellID, spellData in pairs(curses.trackedCurseIds) do
             if spellData.name and not seenNames[spellData.name] then
-                seenNames[spellData.name] = true
-                table.insert(ownDots, { spellID = spellID, name = spellData.name, duration = spellData.duration, rank = spellData.rank or 1 })
+                local _, _, tex = SpellInfo(spellID)
+                -- Only include spells with a valid non-fallback texture (known to player).
+                if tex and not string.find(tex, "INV_Misc_QuestionMark", 1, true) then
+                    seenNames[spellData.name] = true
+                    table.insert(ownDots, { spellID = spellID, name = spellData.name, duration = spellData.duration, rank = spellData.rank or 1, texture = tex })
+                end
             end
         end
-        -- Distribute own DoTs across test targets (2-3 per target for realism)
+        -- v4.1.1: Distribute own DoTs per target based on t.ownSlots (replaces the
+        -- hardcoded "3 for tIdx<=4, 2 otherwise" rule — each target now self-declares
+        -- how many own DoTs it wants).
         local dotCount = table.getn(ownDots)
         if dotCount > 0 then
             for tIdx, t in ipairs(testTargets) do
                 local guid = TEST_GUID_PREFIX .. t.id
-                -- Add 2-3 own DoTs per target, rotating through the list
-                local dotsPerTarget = 3
-                if tIdx > 4 then dotsPerTarget = 2 end
+                local dotsPerTarget = t.ownSlots or 0
                 for d = 1, dotsPerTarget do
                     local dotIdx = math.mod((tIdx - 1) * dotsPerTarget + (d - 1) + randomSeed, dotCount) + 1
                     local dot = ownDots[dotIdx]
                     if dot and not curses.guids[guid][dot.name] then
                         local elapsed = math.mod((tIdx * 3 + d * 2 + randomSeed), math.max(dot.duration - 2, 1)) + 1
-                        local _, _, tex = SpellInfo(dot.spellID)
                         curses.guids[guid][dot.name] = {
                             rank = dot.rank,
                             duration = dot.duration,
@@ -288,7 +304,7 @@ function CursiveTestOverlay_Enable()
                             spellID = dot.spellID,
                             targetGuid = guid,
                             currentPlayer = true,
-                            sharedTexture = tex,
+                            sharedTexture = dot.texture,
                             testFrozenElapsed = elapsed,
                         }
                         ownDotsAdded = ownDotsAdded + 1
@@ -443,6 +459,47 @@ end
 function CursiveTestOverlay_UnitCanAttack(guid)
     if testActive and testData[guid] then
         return true
+    end
+    return nil
+end
+
+-- ============================================================
+-- v4.1.1: Feature-test Mock APIs (CC, Reflect, OOR, LoS)
+-- Returns nil for non-test GUIDs so call-sites can distinguish
+-- "override present" from "no override, run real code".
+-- ============================================================
+
+-- Returns true/false for test GUIDs (whether CC is flagged), nil for real GUIDs.
+function CursiveTestOverlay_HasActiveCC(guid)
+    if testActive and testData[guid] then
+        return testData[guid].hasCC == true
+    end
+    return nil
+end
+
+-- Returns school-string if test GUID has reflectSchool, false if test GUID without
+-- reflect (skip real UnitBuff scan to avoid errors on fake GUID), nil for real GUIDs.
+function CursiveTestOverlay_HasSpellReflect(guid)
+    if testActive and testData[guid] then
+        local school = testData[guid].reflectSchool
+        if school then return school end
+        return false
+    end
+    return nil
+end
+
+-- Returns true/false for test GUIDs (whether explicitly flagged OOR), nil for real GUIDs.
+function CursiveTestOverlay_IsOutOfRange(guid)
+    if testActive and testData[guid] then
+        return testData[guid].outOfRange == true
+    end
+    return nil
+end
+
+-- Returns true/false for test GUIDs (whether explicitly flagged LoS-blocked), nil for real GUIDs.
+function CursiveTestOverlay_IsBlockedLoS(guid)
+    if testActive and testData[guid] then
+        return testData[guid].losBlocked == true
     end
     return nil
 end

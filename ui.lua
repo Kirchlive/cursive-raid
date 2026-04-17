@@ -376,6 +376,13 @@ ui.BarUpdate = function()
 
 	-- v4.0.5: Out-of-range / line-of-sight stripe indicator
 	-- v4.0.6: Throttled to 500ms per GUID (range is cached in filter.lua, LOS cached here)
+	-- v4.1.1 FIX (Bug #2): UnitXP("inSight", ...) returns a BOOLEAN (true/false),
+	-- not a number. The previous check `los == 0` was never true — LoS-blocked
+	-- targets returned `false` which does not equal 0, so `inSight` stayed true
+	-- forever. Live-verified via ClaudeBridge on 2026-04-17: subcommand is
+	-- "inSight" (lowercase i), return type is boolean. Correct check: `los == false`.
+	-- Additionally: decouple LoS from inRange. A target behind a wall IN range should
+	-- still show as LoS-blocked (stripes). TestOverlay override runs before UnitXP.
 	if this.oorFrame then
 		if Cursive.db.profile.oorstripes then
 			-- LOS check throttled independently per bar
@@ -383,9 +390,12 @@ ui.BarUpdate = function()
 				this._oorTick = GetTime() + 0.25
 				local inRange = Cursive.filter.range(this.guid)
 				local inSight = true
-				if inRange and UnitXP then
+				-- v4.1.1: TestOverlay LoS override (nil = no override, real API runs)
+				if CursiveTestOverlay_IsBlockedLoS and CursiveTestOverlay_IsBlockedLoS(this.guid) then
+					inSight = false
+				elseif UnitXP then
 					local ok, los = pcall(UnitXP, "inSight", "player", this.guid)
-					if ok and los == 0 then inSight = false end
+					if ok and los == false then inSight = false end
 				end
 				this._oorCached = inRange and inSight
 			end
@@ -1682,8 +1692,12 @@ local function DisplayGuid(guid)
 	-- v3.2.1: Shared rendering function for debuff icons (main side + other side)
 	local function RenderCurseIcon(curse, curseData, curseName, remaining)
 		-- Get texture — priority: own spell > stored scan > SpellInfo > live scan > fallback
+		-- v4.1.1 FIX: skip trackedCurseIds texture when it's the "?" fallback — otherwise
+		-- the priority chain locks in a broken icon and sharedTexture (correct) is never used.
+		-- Happens for cross-class spells that aren't in the player's spellbook (SpellInfo
+		-- returns nil → some init paths cache the "?" icon).
 		local textureData = Cursive.curses.trackedCurseIds[curseData.spellID]
-		if textureData and textureData.texture then
+		if textureData and textureData.texture and not string.find(textureData.texture, "INV_Misc_QuestionMark", 1, true) then
 			curse:SetTexture(textureData.texture)
 		elseif curseData.sharedTexture then
 			curse:SetTexture(curseData.sharedTexture)

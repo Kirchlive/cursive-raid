@@ -69,8 +69,17 @@ local rangeCache = {}       -- guid -> { result = bool, expires = time }
 local RANGE_CACHE_TTL = 0.25 -- v4.0.6: 250ms TTL — balanced between perf and responsiveness
 
 filter.range = function(unit)
-	-- v4.0.5: TestOverlay GUIDs are always "in range"
-	if CursiveTestOverlay_IsTestGuid and CursiveTestOverlay_IsTestGuid(unit) then return true end
+	-- v4.1.1: TestOverlay range override. Gate on string prefix directly instead of
+	-- CursiveTestOverlay_IsTestGuid — that returns false when TestOverlay is disabled,
+	-- which allowed stale test-GUIDs (seen briefly during Enable/Disable transitions or
+	-- when cached by call-sites) to fall through to CheckInteractDistance(), throwing
+	-- "Unknown unit name: CURSIVE_TEST_*" errors. Prefix check is state-independent.
+	if type(unit) == "string" and strfind(unit, "CURSIVE_TEST_", 1, true) then
+		if CursiveTestOverlay_IsOutOfRange and CursiveTestOverlay_IsOutOfRange(unit) then
+			return false
+		end
+		return true
+	end
 
 	-- v4.0.6: Return cached result if fresh
 	local now = GetTime()
@@ -188,8 +197,11 @@ function Cursive:ShouldDisplayGuid(guid)
 		return true
 	end
 
-	-- v3.2.1: Raid-marked mobs ALWAYS shown (highest priority after target)
-	if filter.icon(guid) and filter.attackable(guid) then
+	-- v4.1.1 FIX (Bug #3): Raid-mark bypass only applies when "Has Raid Mark"
+	-- filter is explicitly enabled. Pre-fix: stale-marked OOC bosses leaked past
+	-- combat/range filters regardless of user settings. Users who want the old
+	-- "always show marked mobs" behavior must enable the "Has Raid Mark" checkbox.
+	if Cursive.db.profile.filterraidmark and filter.icon(guid) and filter.attackable(guid) then
 		return true
 	end
 
