@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/8ef4428f-9915-4149-b663-65ce0aa54115" alt="Cursive Raid v4.0" width="1768">
+  <img src="https://github.com/user-attachments/assets/8ef4428f-9915-4149-b663-65ce0aa54115" alt="Cursive Raid" width="1768">
 </p>
 
 <h1 align="center">Cursive Raid</h1>
@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/WoW-1.12%20Vanilla-blue?style=flat-square" alt="WoW 1.12">
   <img src="https://img.shields.io/badge/TurtleWoW-Compatible-green?style=flat-square" alt="TurtleWoW">
   <img src="https://img.shields.io/badge/SuperWoW-Required-orange?style=flat-square" alt="SuperWoW">
-  <img src="https://img.shields.io/badge/Version-4.1.0-brightgreen?style=flat-square" alt="v4.1.0">
+  <img src="https://img.shields.io/badge/Version-4.1.3-brightgreen?style=flat-square" alt="v4.1.3">
   <img src="https://img.shields.io/badge/Lua-5.0-purple?style=flat-square" alt="Lua 5.0">
 </p>
 
@@ -319,7 +319,33 @@ local guid = Cursive:GetTarget("Corruption", "HIGHEST_HP", {})
 
 ## Version History
 
-### v4.1.0 — April 2026 *(current)*
+### v4.1.3 — April 2026 *(current)*
+
+Follow-up hotfix iteration after Naxx raid + live validation. Splits range semantics cleanly.
+
+- **OOR stripes use spell-range, "Within Range" filter uses 120y** — distinct semantics: the filter broadens the list, stripes tell you whether you can actually cast
+- **300-yard overall max tracking range** — passive-acquired UNIT_COMBAT GUIDs from distant raid members no longer linger in the list
+- **`UnitXP("distanceBetween")` replaces `IsSpellInRange` for passive GUIDs** — the old API returns `1` at 600+ yards for non-target units, so stripes effectively never fired for passive acquisitions
+
+### v4.1.2 — April 2026
+
+Three follow-up fixes from v4.1.1 live validation.
+
+- **Targets no longer disappear at standstill** — v4.1.1 `evictStale` used a 30s TTL; rewritten to `UnitExists`-based removal with 5-min safety-valve TTL
+- **Name Length slider now applies live** — `SetWidth` cache-guard in `BarUpdate` instead of create-only
+- **Within Range is a fixed 120-yard radius** — replaces misleading class-spell-range check
+
+### v4.1.1 — April 2026
+
+Hotfix release after Naxx raid on 2026-04-16. Three correctness bugs fixed plus TestOverlay rewrite.
+
+- **UNIT_COMBAT tracking restored** — `arg1` is a unit token (not GUID); the `0x`-prefix guard silently rejected every passive acquisition since v4.0.6
+- **LoS check actually blocks** — `UnitXP("inSight")` returns a boolean, but `ui.lua` compared to `0`; mobs behind walls now show OOR stripes
+- **Raid-mark filter bypass respects the toggle** — OOC bosses with stale marks no longer leak past the "In Combat" filter
+- **"?" debuff icons fixed** — render priority chain skips the `INV_Misc_QuestionMark` fallback from third-party addon injections
+- **TestOverlay rebuilt** — 8 targets with unique raid icons covering every feature (CC, Reflect, OOR, LoS, Scythe procs, weapon procs)
+
+### v4.1.0 — April 2026
 
 Major performance update. Fixed extreme lag in Alterac Valley and large battlegrounds.
 

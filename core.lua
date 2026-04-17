@@ -33,6 +33,12 @@ local GUID_CAP = 60
 -- still visible just because no UNIT_COMBAT event fired (regression at standstill).
 local LRU_TTL = 300
 
+-- v4.1.3: Hard cap on tracking distance. The Within Range filter is 120y, but
+-- without it Cursive tracked mobs up to ~300-700y via UNIT_COMBAT events from
+-- other raid members attacking distant units. 300y is the overall max so passive
+-- acquisition from cross-map events still gets evicted promptly.
+local MAX_TRACK_RANGE = 300
+
 -- v4.0.6: Check if GUID is high-priority (target, raid-marked, or has our curses)
 -- v4.1.1: Moved above add() so both add() and addGuid() can enforce the cap.
 local function isHighPriorityGuid(guid)
@@ -102,7 +108,17 @@ Cursive.core.evictStale = function()
 		if not isHighPriorityGuid(guid) then
 			local exists = UnitExists(guid)
 			local dead = exists and UnitIsDead(guid)
-			if (not exists) or dead or ((now - lastSeen) > LRU_TTL) then
+			-- v4.1.3: Also evict if mob drifted beyond the 300y overall max track range.
+			-- UnitXP distance is only checked when the unit exists — no point probing
+			-- a GUID that's already gone from the client.
+			local farAway = false
+			if exists and not dead and UnitXP then
+				local ok, dist = pcall(UnitXP, "distanceBetween", "player", guid)
+				if ok and type(dist) == "number" and dist > MAX_TRACK_RANGE then
+					farAway = true
+				end
+			end
+			if (not exists) or dead or farAway or ((now - lastSeen) > LRU_TTL) then
 				Cursive.core.guids[guid] = nil
 				Cursive.core._guidCount = Cursive.core._guidCount - 1
 				if Cursive.core._guidCount < 0 then Cursive.core._guidCount = 0 end

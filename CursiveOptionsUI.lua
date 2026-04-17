@@ -669,7 +669,7 @@ title:SetText("Cursive Raid")
 local versionText = titleFrame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 versionText:SetPoint("BOTTOMLEFT", title, "BOTTOMRIGHT", 3, 1)
 versionText:SetFont(STANDARD_TEXT_FONT, 8, "")
-versionText:SetText("v4.0.3")
+versionText:SetText("v4.1.3")
 versionText:SetTextColor(1, 1, 1)
 
 -- Close button (scaled to fit title bar, 1px from edges)
@@ -2785,7 +2785,7 @@ _, y = CreateRow(filtChild, "CursiveOptFilterNotPlayer", y, "Not Player", "check
     { tooltipText = "Only show NON player units" })
 
 _, y = CreateRow(filtChild, "CursiveOptFilterRange", y, "Within Range", "checkbox", "filterrange",
-    { tooltipText = "Only show units within 120 yards (when disabled, all API-trackable units are shown)" })
+    { tooltipText = "Only show units within 120 yards (when disabled, units up to 300 yards are tracked; OOR stripes show beyond spell-casting range)" })
 
 _, y = CreateRow(filtChild, "CursiveOptFilterRaidMark", y, "Has Raid Mark", "checkbox", "filterraidmark",
     { tooltipText = "Only show units with raid marks" })

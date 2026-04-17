@@ -2,17 +2,26 @@
 
 ## v4.1.3 — 2026-04-17
 
-Follow-up to v4.1.2. Split range semantics: the "Within Range" filter and the OOR-stripe indicator now use distinct range checks, matching their different purposes.
+Follow-up to v4.1.2. Split range semantics: the "Within Range" filter and the OOR-stripe indicator now use distinct range checks, matching their different purposes. Also adds a hard 300-yard overall tracking cap.
 
 ### Bug Fixes
 - **OOR stripes showed up only as LoS-blocked, never as out-of-range (ui.lua:387)** — v4.1.2 made `filter.range()` a 120-yard check. Rob reported that a Bloodscalp attacked by another player showed up in his list without stripes at 80 yards — "in range" per the 120y rule, but obviously out of casting range for a Warlock (30-42y with talents). The real semantic he wanted was: **the filter broadens tracking to 120y, but the stripes tell him whether he can actually cast on the unit right now**. Fix: added `filter.inSpellRange(unit)` using `UnitXP("distanceBetween")` against a class-specific max spell range (Warlock 42y, Mage 41y, Priest 40y, Druid 35y, Hunter 41y, Shaman/Paladin 30y, melee 10y). ui.lua OOR-stripe code now calls this instead of `filter.range`. `filter.range` itself stays at 120y for the "Within Range" filter.
 - **Why not IsSpellInRange?** — Verified 2026-04-17 via ClaudeBridge: `IsSpellInRange("Corruption", guid)` returns `1` (in range) for passive-acquired GUIDs at 600+ yards when the unit is not the current target. The WoW 1.12 API only evaluates the range predicate correctly for target/party/raid unit tokens. Using `UnitXP("distanceBetween", "player", guid)` is reliable regardless of target state and yields the actual yard value.
 
+### New
+- **300-yard overall max tracking range (core.lua:38)** — evictStale now also drops non-priority GUIDs whose `UnitXP` distance exceeds 300 yards. Prevents cross-map UNIT_COMBAT events (e.g. other raid members attacking distant targets) from keeping 600+ yard mobs in the list. Distinct from the 120y "Within Range" filter — this is a hard global cap.
+
 ### Caching
 - `spellRangeCache` added as a sibling to `rangeCache` (both 250ms TTL). `filter.cleanRangeCache()` now purges expired entries from both.
 
+### Housekeeping
+- `CursiveOptionsUI.lua` version label updated v4.0.3 → v4.1.3 (was stale from earlier release)
+- `README.md` badge and version history updated through v4.1.3
+- Tooltip on "Within Range" filter clarifies the 120y/300y/spell-range relationships
+
 ### Live Verification
 - Live data: Bloodscalp at 80y → `filter.range = true` (within 120y), `filter.inSpellRange = false` (>42y) → stripes shown, still in list. Exactly Rob's intended semantic.
+- 300y cap evicts far-away UNIT_COMBAT-acquired GUIDs within 0.5s of drift (2Hz evictStale tick).
 
 ---
 
