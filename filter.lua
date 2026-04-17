@@ -37,6 +37,14 @@ end
 
 filter.infight = function(unit)
 	if CursiveTestOverlay_IsTestGuid and CursiveTestOverlay_IsTestGuid(unit) then return true end
+	-- v4.1.4: If the player is not in combat, the "In Combat" filter is a no-op
+	-- (all attackable mobs pass through). This matches the pre-regression behavior
+	-- where the list showed everything in range while scouting / setting up pulls,
+	-- and only started filtering once the player actually engaged.
+	-- The ShouldDisplayGuid comment at line ~281 already described this intent
+	-- ("Use both the unit's AND the player's combat state") but the code only
+	-- checked the unit's state, which made the list go empty out of combat.
+	if not UnitAffectingCombat("player") then return true end
 	return UnitAffectingCombat(unit) and true or false
 end
 

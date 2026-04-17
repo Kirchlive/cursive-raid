@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/WoW-1.12%20Vanilla-blue?style=flat-square" alt="WoW 1.12">
   <img src="https://img.shields.io/badge/TurtleWoW-Compatible-green?style=flat-square" alt="TurtleWoW">
   <img src="https://img.shields.io/badge/SuperWoW-Required-orange?style=flat-square" alt="SuperWoW">
-  <img src="https://img.shields.io/badge/Version-4.1.3-brightgreen?style=flat-square" alt="v4.1.3">
+  <img src="https://img.shields.io/badge/Version-4.1.4-brightgreen?style=flat-square" alt="v4.1.4">
   <img src="https://img.shields.io/badge/Lua-5.0-purple?style=flat-square" alt="Lua 5.0">
 </p>
 
@@ -319,7 +319,13 @@ local guid = Cursive:GetTarget("Corruption", "HIGHEST_HP", {})
 
 ## Version History
 
-### v4.1.3 — April 2026 *(current)*
+### v4.1.4 — April 2026 *(current)*
+
+One-line fix reported during guild testing.
+
+- **"In Combat" filter respects the player's combat state again** — when you are out of combat, all attackable mobs in range show up (for scouting and pull setup). Once you engage, the filter narrows to mobs actually in combat. This was the pre-regression behavior the `ShouldDisplayGuid` comment was already describing.
+
+### v4.1.3 — April 2026
 
 Follow-up hotfix iteration after Naxx raid + live validation. Splits range semantics cleanly.
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## v4.1.4 — 2026-04-17
+
+Quick fix reported immediately after the v4.1.3 push.
+
+### Bug Fixes
+- **"In Combat" filter went empty while out of combat (filter.lua:38)** — `filter.infight(guid)` only checked the unit's combat state, so with the filter enabled and the player idle, the list went empty. The pre-regression behavior (and the intent documented in the `ShouldDisplayGuid` comment: *"Use both the unit's AND the player's combat state as fallback"*) was: while the player is out of combat, show all attackable mobs in range; only once the player engages does the filter narrow to mobs actively in combat. Fix: gate on `UnitAffectingCombat("player")` first — if the player is OOC, the filter is a no-op.
+
+---
+
 ## v4.1.3 — 2026-04-17
 
 Follow-up to v4.1.2. Split range semantics: the "Within Range" filter and the OOR-stripe indicator now use distinct range checks, matching their different purposes. Also adds a hard 300-yard overall tracking cap.
