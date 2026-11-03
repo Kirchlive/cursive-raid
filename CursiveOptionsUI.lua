@@ -85,6 +85,7 @@ local GENERAL_KEYS = {
     "enabled", "clickthrough", "showbackdrop", "invertbars",
     "expandupwards", "showtargetindicator", "showraidicons", "showhealthbar",
     "showunitname", "alwaysshowcurrenttarget", "coloreddecimalduration",
+    "threatenabled", "threatstacked", "threatholdername", "threatvalue", "threatpullwarn",
 }
 local DISPLAY_KEYS = {
     "scale", "opacity", "fontscale", "maxcurses", "maxrow", "maxcol", "spacing", "debufficonspacing",
@@ -104,6 +105,7 @@ local DEFAULTS = {
     invertbars = false, expandupwards = false, showtargetindicator = false,
     showraidicons = true, showhealthbar = true, showunitname = true,
     alwaysshowcurrenttarget = false, coloreddecimalduration = false,
+    threatenabled = true, threatstacked = true, threatholdername = true, threatvalue = false, threatpullwarn = true,
     scale = 1.0, opacity = 1.0, fontscale = 1.0,
     maxcurses = 14, maxrow = 8, maxcol = 1, spacing = 3, debufficonspacing = 1,
     healthwidth = 100, height = 18, raidiconsize = 18, curseiconsize = 18,
@@ -841,8 +843,23 @@ _, y = CreateRow(genChild, "CursiveOptEnabled", y, "Enabled", "checkbox", "enabl
 _, y = CreateRow(genChild, "CursiveOptMove", y, "Move UI Frame", "checkbox", "move_special",
     { tooltipText = "Enable to move and show frame background. Disable to lock." })
 
-_, y = CreateRow(genChild, "CursiveOptTestOverlay", y, "Test Overlay", "checkbox", "testoverlay_special",
-    { tooltipText = "Show fake raid targets with debuffs for live UI preview. Disable to clear." })
+-- Header: Threat (TWTv4 server feed -- party/raid only)
+_, y = CreateRow(genChild, "CursiveGenHdrThreat", y, "Threat", "header")
+
+_, y = CreateRow(genChild, "CursiveOptThreatEnabled", y, "Enable Threat Module", "checkbox", "threatenabled",
+    { tooltipText = "Color bars by who holds aggro and show threat on each bar. Uses the server threat feed (TWTv4); only active in a party or raid." })
+
+_, y = CreateRow(genChild, "CursiveOptThreatStacked", y, "Stacked Threat Text (2 lines)", "checkbox", "threatstacked",
+    { tooltipText = "Put enemy name + HP on the top line and the aggro holder on a second line. Raise Bar Height (Display tab) to ~24-28 for comfortable spacing." })
+
+_, y = CreateRow(genChild, "CursiveOptThreatName", y, "Show Aggro Holder Name", "checkbox", "threatholdername",
+    { tooltipText = "Show the name of the character holding aggro on each bar" })
+
+_, y = CreateRow(genChild, "CursiveOptThreatValue", y, "Raw Value On Target", "checkbox", "threatvalue",
+    { tooltipText = "On your current target, show your raw threat value instead of percent" })
+
+_, y = CreateRow(genChild, "CursiveOptThreatPullWarn", y, "Pull Warning", "checkbox", "threatpullwarn",
+    { tooltipText = "Turn the threat text red on your target when your threat reaches 90% of the aggro holder" })
 
 -- Header: Display
 _, y = CreateRow(genChild, "CursiveGenHdrDisplay", y, "Display", "header")
@@ -2708,7 +2725,7 @@ RebuildFilterContent = function()
                 removeBtn:SetHeight(18)
                 removeBtn:SetPoint("RIGHT", entry, "RIGHT", -16, 0)
 
-                local removeTex = removeBtn:CreateTexture(entryName .. "RemoveTex", "ARTWORK")
+                local removeTex = removeBtn:CreateTexture(entryName .. "RemoveBtnTex", "ARTWORK")
                 removeTex:SetTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Up")
                 removeTex:SetAllPoints(removeBtn)
 
@@ -2937,7 +2954,6 @@ function CursiveOpts.Initialize()
     -- General tab checkboxes
     CursiveOpts.SetCheckbox("CursiveOptEnabled", p.enabled)
     CursiveOpts.SetCheckbox("CursiveOptMove", not p.clickthrough)
-    CursiveOpts.SetCheckbox("CursiveOptTestOverlay", CursiveTestOverlay_IsActive and CursiveTestOverlay_IsActive() or false)
     CursiveOpts.SetCheckbox("CursiveOptHealthBar", p.showhealthbar)
     CursiveOpts.SetCheckbox("CursiveOptUnitName", p.showunitname)
     CursiveOpts.SetCheckbox("CursiveOptRaidIcons", p.showraidicons)
@@ -2946,6 +2962,11 @@ function CursiveOpts.Initialize()
     CursiveOpts.SetCheckbox("CursiveOptAlwaysTarget", p.alwaysshowcurrenttarget)
     CursiveOpts.SetCheckbox("CursiveOptCCTransparency", p.cctransparency)
     CursiveOpts.SetCheckbox("CursiveOptOORStripes", p.oorstripes)
+    CursiveOpts.SetCheckbox("CursiveOptThreatEnabled", p.threatenabled)
+    CursiveOpts.SetCheckbox("CursiveOptThreatStacked", p.threatstacked)
+    CursiveOpts.SetCheckbox("CursiveOptThreatName", p.threatholdername)
+    CursiveOpts.SetCheckbox("CursiveOptThreatValue", p.threatvalue)
+    CursiveOpts.SetCheckbox("CursiveOptThreatPullWarn", p.threatpullwarn)
     CursiveOpts.SetCheckbox("CursiveRaidShowMissing", p.showMissingDebuffs)
     CursiveOpts.SetCheckbox("CursiveRaidIncludeOwn", p.includeOwnRaidInOrder)
 
@@ -3123,19 +3144,6 @@ function CursiveOpts.ToggleOption(configKey)
         -- Update the checkbox visual (checked = moveable = NOT clickthrough)
         local cb = getglobal("CursiveOptMoveCheck")
         if cb then cb:SetChecked(not p.clickthrough) end
-        return
-    end
-
-    if configKey == "testoverlay_special" then
-        -- Toggle Test Overlay
-        if CursiveTestOverlay_IsActive and CursiveTestOverlay_IsActive() then
-            CursiveTestOverlay_Disable()
-        else
-            CursiveTestOverlay_Enable()
-        end
-        -- Update checkbox visual
-        local cb = getglobal("CursiveOptTestOverlayCheck")
-        if cb then cb:SetChecked(CursiveTestOverlay_IsActive and CursiveTestOverlay_IsActive()) end
         return
     end
 

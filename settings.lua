@@ -12,6 +12,12 @@ Cursive:RegisterDefaults("profile", {
 
 	-- Core
 	enabled = true,
+	-- Threat module (TWTv4 server feed)
+	threatenabled = true,
+	threatstacked = true,
+	threatvalue = false,
+	threatholdername = true,
+	threatpullwarn = true,
 	clickthrough = true,
 	showbackdrop = false,
 	showtitle = false,
@@ -1103,96 +1109,17 @@ Cursive.cmdtable = {
 	}
 }
 
-local deuce = Cursive:NewModule("Options Menu")
-deuce.hasFuBar = IsAddOnLoaded("FuBar") and FuBar
-deuce.consoleCmd = not deuce.hasFuBar
-
-CursiveOptions = AceLibrary("AceAddon-2.0"):new("AceDB-2.0", "FuBarPlugin-2.0")
-CursiveOptions.name = " "
-CursiveOptions.title = " "
-CursiveOptions.hasNoColor = true
-CursiveOptions:RegisterDB("CursiveDB")
-CursiveOptions.hasIcon = "Interface\\Icons\\INV_Misc_Head_Dragon_01"
-CursiveOptions.defaultMinimapPosition = 180
-CursiveOptions.independentProfile = true
-CursiveOptions.hideWithoutStandby = false
-
--- v4.0: No Dewdrop menu — right-click fully disabled
-CursiveOptions.OnMenuRequest = nil
-CursiveOptions.overrideMenu = true
-CursiveOptions.cannotDetachTooltip = true
-CursiveOptions.tooltipHiddenWhenEmpty = true
-
--- v4.0: Custom tooltip with swapped name + red SUPERWOW
-function CursiveOptions:OnTooltipUpdate()
-	if AceLibrary:HasInstance("Tablet-2.0") then
-		local Tablet = AceLibrary("Tablet-2.0")
-		local cat = Tablet:AddCategory("columns", 1)
-		cat:AddLine("text", "Cursive Raid v4.0.3 |CFFFFCC00[|r|CFFCC3333SUPERWOW|r|CFFFFCC00]|r")
-	end
-end
-
--- v4.0: Override FuBar OnClick — Left=Options only
-function CursiveOptions:OnClick(button)
-	-- Close Dewdrop if it somehow opened (AceDB profile menu)
-	if AceLibrary:HasInstance("Dewdrop-2.0") then
-		local Dewdrop = AceLibrary("Dewdrop-2.0")
-		if Dewdrop:IsOpen() then Dewdrop:Close() end
-	end
-	if button == "LeftButton" then
-		if CursiveOptionsFrame then
-			if CursiveOptionsFrame:IsShown() then
-				CursiveOptionsFrame:Hide()
-			else
-				CursiveOptionsFrame:Show()
-			end
+-- v5.0-octo: FuBar/Tablet/Dewdrop minimap plugin removed entirely.
+-- Options open via /cursive options (see commands.lua) or this global:
+function Cursive_ToggleOptions()
+	if CursiveOptionsFrame then
+		if CursiveOptionsFrame:IsShown() then
+			CursiveOptionsFrame:Hide()
+		else
+			CursiveOptionsFrame:Show()
 		end
 	end
 end
-
--- v4.0: Continuously suppress Dewdrop on minimap button
-local mmPatch = CreateFrame("Frame")
-mmPatch:RegisterEvent("PLAYER_LOGIN")
-mmPatch.patched = false
-mmPatch:SetScript("OnEvent", function()
-	mmPatch:SetScript("OnUpdate", function()
-		if (this.tick or 0) > GetTime() then return end
-		this.tick = GetTime() + 0.2
-		-- Check periodically until we find and patch the minimap button
-		local mmFrame = CursiveOptions.minimapFrame
-		if not mmFrame then return end
-		if mmPatch.patched then
-			-- Keep closing Dewdrop if it opens on right-click
-			if AceLibrary:HasInstance("Dewdrop-2.0") then
-				local Dewdrop = AceLibrary("Dewdrop-2.0")
-				if Dewdrop:IsOpen(mmFrame) then Dewdrop:Close() end
-			end
-			return
-		end
-		mmPatch.patched = true
-
-		-- Set colored name after FuBar created frames
-		CursiveOptions.name = "Cursive Raid v4.0.3 |CFFFFCC00[|r|CFFCC3333SUPERWOW|r|CFFFFCC00]|r"
-
-		-- Override OnClick — only LeftButton, right-click does nothing
-		mmFrame:SetScript("OnClick", function()
-			if arg1 == "LeftButton" then
-				if CursiveOptionsFrame then
-					if CursiveOptionsFrame:IsShown() then
-						CursiveOptionsFrame:Hide()
-					else
-						CursiveOptionsFrame:Show()
-					end
-				end
-			end
-			-- Suppress any Dewdrop that might have been triggered
-			if AceLibrary:HasInstance("Dewdrop-2.0") then
-				local Dewdrop = AceLibrary("Dewdrop-2.0")
-				if Dewdrop:IsOpen() then Dewdrop:Close() end
-			end
-		end)
-	end)
-end)
 
 -- v4.0: Expose debuff data for CursiveOptionsUI.lua
 Cursive.optionsData = {

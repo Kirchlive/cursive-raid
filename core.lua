@@ -139,6 +139,17 @@ Cursive.core.enable = function()
 	-- arg1
 	Cursive.core:RegisterEvent("UNIT_COMBAT") -- this can get called with player/target/raid1 etc
 	Cursive.core:RegisterEvent("UNIT_MODEL_CHANGED")
+	-- v5.0.6 (migration #3): ClassicAPI event-driven acquisition. A pack's
+	-- mobs enter tracking the moment their nameplates stream in, instead of
+	-- waiting for a combat/model event to touch them (the "standstill"
+	-- acquisition gap noted in v4.1.2). Gated at runtime: CLASSIC_API_VERSION
+	-- is defined by ClassicAPI.dll after client boot.
+	-- NAME_PLATE_UNIT_REMOVED is deliberately NOT used for eviction: plates
+	-- vanish when off-screen while the mob is still relevant; evictStale()
+	-- (UnitExists/distance/TTL) remains the only removal path.
+	if CLASSIC_API_VERSION then
+		Cursive.core:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+	end
 end
 
 Cursive.core:SetScript("OnEvent", function()
@@ -147,6 +158,13 @@ Cursive.core:SetScript("OnEvent", function()
 	local a1 = arg1
 	if evt == "PLAYER_TARGET_CHANGED" then
 		this.add("target")
+	elseif evt == "NAME_PLATE_UNIT_ADDED" then
+		-- v5.0.6: arg1 is a "nameplateN" unit token (ClassicAPI). Track only
+		-- attackable units -- with friendly plates visible in a raid this
+		-- would otherwise burn the GUID cap on 40 friendly players.
+		if a1 and UnitCanAttack("player", a1) then
+			this.add(a1)
+		end
 	elseif evt == "UNIT_COMBAT" then
 		-- v4.1.1 FIX (Bug #1): arg1 is a unit token (e.g. "raid5target"), not a GUID.
 		-- The 0x-prefix guard in addGuid() rejected tokens silently, making

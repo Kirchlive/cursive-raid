@@ -261,8 +261,113 @@ Cursive.UpdateFramesFromConfig = function()
 		UpdateRootBarFrame()
 	end
 
+	-- v5.0.3: re-anchor bar text lines live (frames are reused, not rebuilt,
+	-- so stacked-layout and height changes would otherwise need a /reload)
+	Cursive.RelayoutBarTexts()
+
 	-- after 3 seconds reset the unit frames so all changes are applied
 	Cursive:ScheduleEvent("resetUnitFrames", Cursive.ResetUnitFrames, 3)
+end
+
+Cursive.RelayoutBarTexts = function()
+	local config = Cursive.db.profile
+	local stacked = (config.threatstacked ~= false) and config.threatenabled ~= false
+	local lineH
+	if stacked then
+		lineH = floor(config.height / 2) - 1
+		if lineH < 8 then lineH = 8 end
+	else
+		lineH = config.height - 4
+	end
+	-- v5.0.4: frames are RECYCLED, never rebuilt, so every creation-time size
+	-- and font must be reapplied here or bars created before a settings change
+	-- keep the old look while new ones get the new look (mixed-bar bug).
+	local txtSize = floor(config.textsize * (config.fontscale or 1) + 0.5)
+	local nameSize = floor((config.nameTextSize or config.textsize) * (config.fontscale or 1) + 0.5)
+	for col, rows in pairs(ui.unitFrames) do
+		for row, unitFrame in pairs(rows) do
+			if unitFrame and unitFrame.healthBar then
+				local hb = unitFrame.healthBar
+
+				-- geometry
+				unitFrame:SetWidth(GetBarWidth())
+				unitFrame:SetHeight(config.height)
+				if unitFrame.firstSection then
+					unitFrame.firstSection:SetHeight(config.height)
+				end
+				if unitFrame.secondSection then
+					unitFrame.secondSection:SetHeight(config.height)
+				end
+				if unitFrame.thirdSection then
+					unitFrame.thirdSection:SetWidth(GetBarThirdSectionWidth())
+					unitFrame.thirdSection:SetHeight(config.height)
+				end
+				if unitFrame.otherSideSection then
+					unitFrame.otherSideSection:SetHeight(config.height)
+				end
+				if unitFrame.armorFrame then
+					unitFrame.armorFrame:SetHeight(config.height)
+				end
+				hb:SetWidth(config.healthwidth)
+				hb:SetHeight(config.height)
+				if unitFrame.reflectText then
+					unitFrame.reflectText:SetWidth(config.healthwidth)
+					unitFrame.reflectText:SetHeight(config.height)
+				end
+
+				-- fonts (creation-time on 1.12; must be re-set for recycled frames)
+				if unitFrame.hpText then
+					unitFrame.hpText:SetFont(STANDARD_TEXT_FONT, txtSize, "THINOUTLINE")
+					unitFrame.hpText:SetWidth(config.healthwidth * 0.6)
+				end
+				if unitFrame.nameText then
+					unitFrame.nameText:SetFont(STANDARD_TEXT_FONT, nameSize, "THINOUTLINE")
+				end
+				if unitFrame.threatText then
+					unitFrame.threatText:SetFont(STANDARD_TEXT_FONT, txtSize, "THINOUTLINE")
+				end
+				if unitFrame.hpText then
+					unitFrame.hpText:ClearAllPoints()
+					unitFrame.hpText:SetHeight(lineH)
+					if stacked then
+						unitFrame.hpText:SetPoint("TOPRIGHT", hb, "TOPRIGHT", -2, -1)
+					else
+						unitFrame.hpText:SetPoint("RIGHT", hb, "RIGHT", -2, 0)
+					end
+				end
+				if unitFrame.nameText then
+					unitFrame.nameText:ClearAllPoints()
+					unitFrame.nameText:SetHeight(lineH)
+					if stacked then
+						unitFrame.nameText:SetPoint("TOPLEFT", hb, "TOPLEFT", 2, -1)
+					else
+						unitFrame.nameText:SetPoint("LEFT", hb, "LEFT", 2, 0)
+					end
+				end
+				if unitFrame.threatText then
+					unitFrame.threatText:ClearAllPoints()
+					unitFrame.threatText:SetHeight(lineH)
+					if stacked then
+						unitFrame.threatText:SetJustifyH("LEFT")
+						unitFrame.threatText:SetPoint("BOTTOMLEFT", hb, "BOTTOMLEFT", 2, 1)
+						unitFrame.threatText:SetWidth(config.healthwidth * 0.65)
+					else
+						unitFrame.threatText:SetJustifyH("CENTER")
+						unitFrame.threatText:SetPoint("CENTER", hb, "CENTER", 0, 0)
+						unitFrame.threatText:SetWidth(config.healthwidth * 0.7)
+					end
+				end
+				if unitFrame.threatValText then
+					unitFrame.threatValText:ClearAllPoints()
+					unitFrame.threatValText:SetHeight(lineH)
+					unitFrame.threatValText:SetJustifyH("RIGHT")
+					unitFrame.threatValText:SetPoint("BOTTOMRIGHT", hb, "BOTTOMRIGHT", -2, 1)
+					unitFrame.threatValText:SetWidth(config.healthwidth * 0.35)
+					unitFrame.threatValText:SetFont(STANDARD_TEXT_FONT, txtSize, "THINOUTLINE")
+				end
+			end
+		end
+	end
 end
 
 Cursive.ResetUnitFrames = function()
@@ -341,9 +446,76 @@ ui.BarUpdate = function()
 		this.healthBar:SetMinMaxValues(0, UnitHealthMax(this.guid))
 		this.healthBar:SetValue(UnitHealth(this.guid))
 
-		-- update health bar color
+		-- update health bar color: aggro palette wins when threat data is fresh
 		local hex, r, g, b, a = utils.GetUnitColor(this.guid)
-		this.healthBar:SetStatusBarColor(r, g, b, a)
+		local tHolder, tPerc, tr, tg, tb
+		if Cursive.threat and Cursive.db.profile.threatenabled then
+			tHolder, tPerc, tr, tg, tb = Cursive.threat.get(this.guid)
+			-- no per-creature (TM) record: base packet still covers the target
+			if not tHolder and UnitIsUnit("target", this.guid) then
+				tHolder, tPerc, tr, tg, tb = Cursive.threat.getTargetFallback()
+			end
+		end
+		if tHolder then
+			this.healthBar:SetStatusBarColor(tr, tg, tb, a)
+		else
+			this.healthBar:SetStatusBarColor(r, g, b, a)
+		end
+
+		-- threat line: holder name (left) + number (right, under the HP text).
+		-- The client resolver knows WHO has aggro but never a number; the
+		-- server packet carries numbers for the current target only -- so on
+		-- the target bar the server values always win.
+		if this.threatText then
+			local config = Cursive.db.profile
+			local nameStr, valStr = "", ""
+			if tHolder then
+				if config.threatholdername ~= false then
+					nameStr = tHolder
+				end
+				if UnitIsUnit("target", this.guid) then
+					local v, myPerc = Cursive.threat.myTargetValue()
+					if config.threatvalue and v then
+						valStr = Cursive.threat.fmtValue(v)
+					elseif myPerc then
+						valStr = floor(myPerc + 0.5) .. "%"
+					elseif tPerc then
+						valStr = floor(tPerc + 0.5) .. "%"
+					end
+					-- pull warning: someone else holds it and I'm at >=90%
+					if config.threatpullwarn ~= false and myPerc and myPerc >= 90
+							and tHolder ~= UnitName("player") then
+						valStr = "|cffff2020" .. valStr .. "|r"
+						nameStr = "|cffff2020" .. nameStr .. "|r"
+					end
+				elseif tPerc then
+					valStr = floor(tPerc + 0.5) .. "%"
+				end
+			end
+
+			local stackedNow = (config.threatstacked ~= false) and config.threatenabled ~= false
+			local ttxt, vtxt
+			if stackedNow and this.threatValText then
+				ttxt = nameStr
+				vtxt = valStr
+			else
+				-- single-line mode: combined, centered; value field unused
+				if nameStr ~= "" and valStr ~= "" then
+					ttxt = nameStr .. " " .. valStr
+				else
+					ttxt = nameStr .. valStr
+				end
+				vtxt = ""
+			end
+			if this.threatText._lastVal ~= ttxt then
+				this.threatText._lastVal = ttxt
+				this.threatText:SetText(ttxt)
+			end
+			if this.threatValText and this.threatValText._lastVal ~= vtxt then
+				this.threatValText._lastVal = vtxt
+				this.threatValText:SetText(vtxt)
+			end
+		end
 
 		-- update health bar border
 		if this.healthBar.border then
@@ -912,10 +1084,10 @@ local function CreateBarFirstSection(unitFrame, guid)
 		targetLeft:SetHeight(8)
 		if config.invertbars then
 			targetLeft:SetPoint("RIGHT", firstSection, "RIGHT", 0, 0)
-			targetLeft:SetTexture("Interface\\AddOns\\Cursive\\img\\target-right")
+			targetLeft:SetTexture("Interface\\AddOns\\Cursive-Raid\\img\\target-right")
 		else
 			targetLeft:SetPoint("LEFT", unitFrame, "LEFT", 0, 0)
-			targetLeft:SetTexture("Interface\\AddOns\\Cursive\\img\\target-left")
+			targetLeft:SetTexture("Interface\\AddOns\\Cursive-Raid\\img\\target-left")
 		end
 		targetLeft:Hide()
 		unitFrame.target_left = targetLeft
@@ -997,24 +1169,66 @@ local function CreateBarSecondSection(unitFrame, guid)
 		healthBar:SetHeight(config.height)
 		unitFrame.healthBar = healthBar
 
+		-- v5.0.3: stacked layout (default) puts enemy name + HP on the top
+		-- line and the aggro holder on its own bottom line, so long names
+		-- never collide with threat text. Toggle: "Stacked Threat Text".
+		local stacked = (config.threatstacked ~= false) and config.threatenabled ~= false
+		local lineH
+		if stacked then
+			lineH = floor(config.height / 2) - 1
+			if lineH < 8 then lineH = 8 end
+		else
+			lineH = config.height - 4
+		end
+
 		local hp = healthBar:CreateFontString(nil, "HIGH", "GameFontWhite")
 		hp:SetFont(STANDARD_TEXT_FONT, floor(config.textsize * (config.fontscale or 1) + 0.5), "THINOUTLINE")
 		hp:SetJustifyH("RIGHT")
-		hp:SetHeight(config.height - 4)
-		-- Anchor to right edge, no fixed width - let it expand naturally
-		hp:SetPoint("RIGHT", healthBar, "RIGHT", -2, 0)
-		-- Set a reasonable max width (prevents overflow on very wide bars)
+		hp:SetHeight(lineH)
+		if stacked then
+			hp:SetPoint("TOPRIGHT", healthBar, "TOPRIGHT", -2, -1)
+		else
+			hp:SetPoint("RIGHT", healthBar, "RIGHT", -2, 0)
+		end
 		hp:SetWidth(config.healthwidth * 0.6)
 		unitFrame.hpText = hp
+
+		-- Threat text: own line in stacked mode, centered overlay otherwise.
+		-- Stacked splits into holder name (bottom-left) + number (bottom-right,
+		-- aligned under the HP number).
+		local threatText = healthBar:CreateFontString(nil, "HIGH", "GameFontWhite")
+		threatText:SetFont(STANDARD_TEXT_FONT, floor(config.textsize * (config.fontscale or 1) + 0.5), "THINOUTLINE")
+		threatText:SetHeight(lineH)
+		if stacked then
+			threatText:SetJustifyH("LEFT")
+			threatText:SetPoint("BOTTOMLEFT", healthBar, "BOTTOMLEFT", 2, 1)
+			threatText:SetWidth(config.healthwidth * 0.65)
+		else
+			threatText:SetJustifyH("CENTER")
+			threatText:SetPoint("CENTER", healthBar, "CENTER", 0, 0)
+			threatText:SetWidth(config.healthwidth * 0.7)
+		end
+		unitFrame.threatText = threatText
+
+		local threatValText = healthBar:CreateFontString(nil, "HIGH", "GameFontWhite")
+		threatValText:SetFont(STANDARD_TEXT_FONT, floor(config.textsize * (config.fontscale or 1) + 0.5), "THINOUTLINE")
+		threatValText:SetJustifyH("RIGHT")
+		threatValText:SetHeight(lineH)
+		threatValText:SetPoint("BOTTOMRIGHT", healthBar, "BOTTOMRIGHT", -2, 1)
+		threatValText:SetWidth(config.healthwidth * 0.35)
+		unitFrame.threatValText = threatValText
 
 		if config.showunitname then
 			local nameMaxW = config.namelength or 80
 			local name = healthBar:CreateFontString(nil, "HIGH", "GameFontWhite")
 			name:SetFont(STANDARD_TEXT_FONT, floor((config.nameTextSize or config.textsize) * (config.fontscale or 1) + 0.5), "THINOUTLINE")
 			name:SetJustifyH("LEFT")
-			name:SetHeight(config.height - 4)
-			-- Name uses fixed width from config so HP always has priority
-			name:SetPoint("LEFT", healthBar, "LEFT", 2, 0)
+			name:SetHeight(lineH)
+			if stacked then
+				name:SetPoint("TOPLEFT", healthBar, "TOPLEFT", 2, -1)
+			else
+				name:SetPoint("LEFT", healthBar, "LEFT", 2, 0)
+			end
 			name:SetWidth(nameMaxW)
 			unitFrame.nameText = name
 		end
@@ -1818,7 +2032,7 @@ local function DisplayGuid(guid)
 		-- Expiring sound
 		if remaining < 1 then
 			if Cursive.curses:ShouldPlayExpiringSound(curseName, guid) then
-				PlaySoundFile("Interface\\AddOns\\Cursive\\sounds\\expiring.mp3")
+				PlaySoundFile("Interface\\AddOns\\Cursive-Raid\\sounds\\expiring.mp3")
 			end
 		elseif Cursive.curses:HasRequestedExpiringSound(curseName, guid) then
 			Cursive.curses:EnableExpiringSound(curseName, guid)

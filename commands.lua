@@ -640,3 +640,45 @@ end
 
 SLASH_CURSIVE1 = "/cursive" --creating the slash command
 SlashCmdList["CURSIVE"] = handleSlashCommands --associating the function with the slash command
+
+-- v5.0-octo: threat + options subcommands layered over the stock handler
+local Cursive_OrigSlash = SlashCmdList["CURSIVE"]
+SlashCmdList["CURSIVE"] = function(msg)
+	if type(msg) == "string" then
+		local _, _, cmd = string.find(msg, "^%s*(%a+)%s*$")
+		if cmd then
+			cmd = string.lower(cmd)
+			local p = Cursive.db and Cursive.db.profile
+			if cmd == "options" or cmd == "config" then
+				if Cursive_ToggleOptions then Cursive_ToggleOptions() end
+				return
+			elseif cmd == "threat" and p then
+				p.threatenabled = not p.threatenabled
+				DEFAULT_CHAT_FRAME:AddMessage("|cffffcc00Cursive:|r threat module " ..
+					(p.threatenabled and "|cff00ff00ON|r" or "|cffff5555OFF|r"))
+				return
+			elseif cmd == "threatstatus" then
+				if Cursive.threat then
+					DEFAULT_CHAT_FRAME:AddMessage("|cffffcc00Cursive threat:|r " .. Cursive.threat.statusLine())
+					if Cursive.threat.stats.lastRaw ~= "" then
+						DEFAULT_CHAT_FRAME:AddMessage("|cff888888last packet:|r " .. Cursive.threat.stats.lastRaw)
+					end
+				end
+				return
+			elseif cmd == "threatdebug" then
+				if Cursive.threat then
+					Cursive.threat.debug = not Cursive.threat.debug
+					DEFAULT_CHAT_FRAME:AddMessage("|cffffcc00Cursive:|r threat debug " ..
+						(Cursive.threat.debug and "|cff00ff00ON|r -- requests and packets will print to chat" or "|cffff5555OFF|r"))
+				end
+				return
+			elseif cmd == "threatvalue" and p then
+				p.threatvalue = not p.threatvalue
+				DEFAULT_CHAT_FRAME:AddMessage("|cffffcc00Cursive:|r target shows " ..
+					(p.threatvalue and "raw threat value" or "threat percent"))
+				return
+			end
+		end
+	end
+	Cursive_OrigSlash(msg)
+end

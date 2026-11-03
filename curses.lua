@@ -1327,7 +1327,7 @@ Cursive:RegisterEvent("CHAT_MSG_SPELL_SELF_DAMAGE",
 					Cursive:CancelScheduledEvent("addCurse" .. lastGuid .. spellName)
 					-- check if sound should be played
 					if curses:ShouldPlayResistSound(lastGuid) then
-						PlaySoundFile("Interface\\AddOns\\Cursive\\Sounds\\resist.mp3")
+						PlaySoundFile("Interface\\AddOns\\Cursive-Raid\\sounds\\resist.mp3")
 					end
 				elseif spellName == L["conflagrate"] and lastGuid then
 					Cursive:CancelScheduledEvent("updateCurse" .. lastGuid .. spellName)
