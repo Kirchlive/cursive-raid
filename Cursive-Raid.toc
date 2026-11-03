@@ -1,9 +1,9 @@
 ## Interface: 11200
-## Title: Cursive Raid |cff33ff99Threat|r v5.0.5-octo
-## Title-zhCN: Cursive Raid Threat v5.0-octo
+## Title: Cursive Raid |cff33ff99Threat|r v5.1.0-octo
+## Title-zhCN: Cursive Raid Threat v5.1.0-octo
 ## Author: Kirchlive, Teto
 ## Notes: Debuff tracker + aggro-colored threat bars (TWThreat+TankPlates merged). SuperWoW required; threat feed needs party/raid.
-## Version: 5.0.5-octo
+## Version: 5.1.0-octo
 ## SavedVariablesPerCharacter: CursiveDB
 ## SavedVariables: CursiveProfiles
 ## X-Embeds: Ace2

@@ -441,10 +441,14 @@ ui.BarUpdate = function()
 		this.tick = GetTime() + 0.05
 	end
 
+	-- v5.1.0-octo: fetch health once per tick, reuse for statusbar + hp text
+	local curHealth = UnitHealth(this.guid)
+	local maxHealth = UnitHealthMax(this.guid)
+
 	-- update statusbar values if it exists
 	if this.healthBar then
-		this.healthBar:SetMinMaxValues(0, UnitHealthMax(this.guid))
-		this.healthBar:SetValue(UnitHealth(this.guid))
+		this.healthBar:SetMinMaxValues(0, maxHealth)
+		this.healthBar:SetValue(curHealth)
 
 		-- update health bar color: aggro palette wins when threat data is fresh
 		local hex, r, g, b, a = utils.GetUnitColor(this.guid)
@@ -601,7 +605,7 @@ ui.BarUpdate = function()
 	end
 
 	if this.hpText then
-		local hp = UnitHealth(this.guid)
+		local hp = curHealth
 		if GetLocale() == "zhCN" then
 			if hp then
 				if hp >= 10000 then
@@ -755,8 +759,13 @@ ui.BarClick = function()
 	if arg1 == "LeftButton" then
 		TargetUnit(this.parent.guid)
 	elseif arg1 == "RightButton" then
+		-- v5.1.0-octo: AttackTarget() is a TOGGLE in 1.12 — only start the
+		-- swing when the click actually changed the target, and guard on the
+		-- real combat state (PlayerFrame.inCombat lags a frame).
+		local _, cur = UnitExists("target")
+		local sameTarget = (cur == this.parent.guid)
 		TargetUnit(this.parent.guid)
-		if (not PlayerFrame.inCombat) then
+		if not sameTarget and not UnitAffectingCombat("player") then
 			AttackTarget()
 		end
 	end
@@ -1062,7 +1071,7 @@ end
 
 local function CreateBarFirstSection(unitFrame, guid)
 	local config = Cursive.db.profile
-	local firstSection = CreateFrame("Frame", "Cursive1stSection", unitFrame)
+	local firstSection = CreateFrame("Frame", nil, unitFrame)
 
 	if config.invertbars then
 		-- When inverted, position relative to second section (rightmost)
@@ -1137,7 +1146,7 @@ end
 
 local function CreateBarSecondSection(unitFrame, guid)
 	local config = Cursive.db.profile
-	local secondSection = CreateFrame("Button", "Cursive2ndSection", unitFrame)
+	local secondSection = CreateFrame("Button", nil, unitFrame)
 
 	if config.invertbars then
 		-- When inverted, position relative to third section (which is created first)
@@ -1159,7 +1168,7 @@ local function CreateBarSecondSection(unitFrame, guid)
 
 	-- create health bar
 	if config.showhealthbar then
-		local healthBar = CreateFrame("StatusBar", "CursiveHealthBar", secondSection)
+		local healthBar = CreateFrame("StatusBar", nil, secondSection)
 		healthBar:SetStatusBarTexture(config.bartexture)
 		healthBar:SetStatusBarColor(1, .8, .2, 1)
 		healthBar:SetMinMaxValues(0, 100)
@@ -1273,11 +1282,14 @@ local function CreateBarSecondSection(unitFrame, guid)
 			healthBar:SetBackdrop(ui.background)
 			healthBar:SetBackdropColor(0, 0, 0, 1)
 
-			local border = CreateFrame("Frame", "CursiveBorder", healthBar.bar)
+			-- v5.1.0-octo: parent/anchor to healthBar — healthBar.bar only
+			-- exists under pfUI; on stock StatusBars .bar is nil and the
+			-- border ended up parentless and screen-anchored.
+			local border = CreateFrame("Frame", nil, healthBar)
 			border:SetBackdrop(ui.border)
 			border:SetBackdropColor(.2, .2, .2, 1)
-			border:SetPoint("TOPLEFT", healthBar.bar, "TOPLEFT", -2, 2)
-			border:SetPoint("BOTTOMRIGHT", healthBar.bar, "BOTTOMRIGHT", 2, -2)
+			border:SetPoint("TOPLEFT", healthBar, "TOPLEFT", -2, 2)
+			border:SetPoint("BOTTOMRIGHT", healthBar, "BOTTOMRIGHT", 2, -2)
 			healthBar.border = border
 		end
 
@@ -1355,7 +1367,7 @@ end
 local function CreateBarThirdSection(unitFrame, guid)
 	local config = Cursive.db.profile
 
-	local thirdSection = CreateFrame("Frame", "Cursive3rdSection", unitFrame)
+	local thirdSection = CreateFrame("Frame", nil, unitFrame)
 
 	if config.invertbars then
 		-- When inverted, this is positioned first (leftmost)
@@ -1449,7 +1461,7 @@ local function CreateBarOtherSideSection(unitFrame, guid)
 	local config = Cursive.db.profile
 	if config.orderotherside == "none" then return end
 
-	local otherSection = CreateFrame("Frame", "Cursive4thSection", unitFrame)
+	local otherSection = CreateFrame("Frame", nil, unitFrame)
 
 	-- Anchor: behind armor frame if active, otherwise behind firstSection
 	local anchor = unitFrame.firstSection
@@ -1538,7 +1550,7 @@ local function CreateBarOtherSideSection(unitFrame, guid)
 end
 
 local function CreateBar(row, col, guid)
-	local unitFrame = CreateFrame("Frame", "CursiveUnitFrame", ui.rootBarFrame)
+	local unitFrame = CreateFrame("Frame", nil, ui.rootBarFrame)
 	unitFrame.guid = guid
 
 	unitFrame:SetScript("OnUpdate", ui.BarUpdate)
@@ -1748,11 +1760,19 @@ local curseNamesPool = {}
 -- Reusable pool for missing debuff keys (avoids table allocation per unit per render tick)
 local missingKeys = {}
 
+-- v5.1.0-octo: per-guid pending shared-debuff set, rebuilt once per main-loop
+-- tick (was: full sharedDebuffGuids scan per displayed bar per tick)
+local pendingByGuid = {}
+
 -- Reusable cache for order weights per sort cycle (avoids recalculating per comparison)
 local orderWeightCache = {}
 
 -- Cache for raid sub-weights
 local raidSubWeightCache = {}
+
+-- v5.1.0-octo: precomputed remaining-time cache so the sort comparator is
+-- pure number compares (no method calls / locale lookups per comparison)
+local remainingCache = {}
 
 local function GetSortedCurses(guidCurses, guid)
 	-- Wipe and reuse pool instead of creating new table each call
@@ -1797,7 +1817,15 @@ local function GetSortedCurses(guidCurses, guid)
 	end
 
 	-- v3.2.1: Primary sort by positional group, secondary by raid debuff order, tertiary by timer
+	-- v5.1.0-octo: resolve ordering + precompute remaining times before tsort
 	local ordering = Cursive.db.profile.curseordering
+	local orderApplied = (ordering == L["Order applied"])
+	if not orderApplied then
+		for i = 1, getn(curseNamesPool) do
+			local key = curseNamesPool[i]
+			remainingCache[key] = Cursive.curses:TimeRemainingRaw(guidCurses[key])
+		end
+	end
 	tsort(curseNamesPool, function(a, b)
 		local wa = orderWeightCache[a]
 		local wb = orderWeightCache[b]
@@ -1813,20 +1841,14 @@ local function GetSortedCurses(guidCurses, guid)
 		-- Tertiary sort within same position group
 		-- v4.0.3: Use raw float (hundredths) for stable sorting, prevents flicker when
 		-- two debuffs have the same rounded second value. Tie-breaker: application time.
-		if ordering == L["Order applied"] then
-			return guidCurses[a].start < guidCurses[b].start
-		elseif ordering == L["Expiring latest -> soonest"] then
-			local ra = Cursive.curses:TimeRemainingRaw(guidCurses[a])
-			local rb = Cursive.curses:TimeRemainingRaw(guidCurses[b])
-			if ra ~= rb then return ra > rb end
-			return guidCurses[a].start < guidCurses[b].start
-		else
-			-- Default: expiring soonest first
-			local ra = Cursive.curses:TimeRemainingRaw(guidCurses[a])
-			local rb = Cursive.curses:TimeRemainingRaw(guidCurses[b])
-			if ra ~= rb then return ra > rb end
+		if orderApplied then
 			return guidCurses[a].start < guidCurses[b].start
 		end
+		-- "Expiring latest -> soonest" and default: longer remaining first
+		local ta = remainingCache[a]
+		local tb = remainingCache[b]
+		if ta ~= tb then return ta > tb end
+		return guidCurses[a].start < guidCurses[b].start
 	end)
 
 	-- Return snapshot as array (caller iterates before next GetSortedCurses call)
@@ -1884,34 +1906,38 @@ local function DisplayGuid(guid)
 		unitFrame.posY = y
 	end
 
-	-- check for shared debuffs
-	for sharedDebuffKey, guids in pairs(Cursive.curses.sharedDebuffGuids) do
-		local guidData = guids[guid]
-		if guidData then
-			local sharedDebuffSpellIds = Cursive.curses.sharedDebuffs[sharedDebuffKey]
-			-- v3.2: hasAnySpellId now returns texture and stacks directly from UnitDebuff
-			local spellId, liveTexture, liveStacks = hasAnySpellId(guid, sharedDebuffSpellIds)
-			if spellId ~= nil then
-				-- Use live texture; for Expose Armor prefer stored CP from armor diff calculation
-				local finalStacks = liveStacks or 0
-				if type(guidData) == "table" and guidData.stacks and guidData.stacks > 0 then
-					-- EA armor-diff stacks override scan stacks (scan always returns 1)
-					if sharedDebuffKey == "exposearmor" or finalStacks == 0 then
-						finalStacks = guidData.stacks
+	-- check for shared debuffs (v5.1.0-octo: per-guid pending set, inverted once per tick)
+	local pendingSet = pendingByGuid[guid]
+	if pendingSet then
+		for sharedDebuffKey in pairs(pendingSet) do
+			local pendGuids = Cursive.curses.sharedDebuffGuids[sharedDebuffKey]
+			local guidData = pendGuids and pendGuids[guid]
+			if guidData then
+				local sharedDebuffSpellIds = Cursive.curses.sharedDebuffs[sharedDebuffKey]
+				-- v3.2: hasAnySpellId now returns texture and stacks directly from UnitDebuff
+				local spellId, liveTexture, liveStacks = hasAnySpellId(guid, sharedDebuffSpellIds)
+				if spellId ~= nil then
+					-- Use live texture; for Expose Armor prefer stored CP from armor diff calculation
+					local finalStacks = liveStacks or 0
+					if type(guidData) == "table" and guidData.stacks and guidData.stacks > 0 then
+						-- EA armor-diff stacks override scan stacks (scan always returns 1)
+						if sharedDebuffKey == "exposearmor" or finalStacks == 0 then
+							finalStacks = guidData.stacks
+						end
 					end
+					-- v3.2.1 FIX: Use detection time from sharedDebuffGuids, not GetTime()
+					local startTime = (type(guidData) == "table" and guidData.time) or GetTime()
+					Cursive.curses:ApplySharedCurse(sharedDebuffKey, spellId, guid, startTime, liveTexture, finalStacks)
+					-- remove guid from pending list
+					Cursive.curses.sharedDebuffGuids[sharedDebuffKey][guid] = nil
+				elseif type(guidData) == "table" and guidData.spellID then
+					-- v3.2.1 FIX: Unit not scannable (not current target / out of range)
+					-- Apply using stored data from initial detection (ScanForProcDebuff etc.)
+					-- Timer will naturally expire; ScanTargetForSharedDebuffs cleans up on target
+					local startTime = guidData.time or GetTime()
+					Cursive.curses:ApplySharedCurse(sharedDebuffKey, guidData.spellID, guid, startTime, guidData.texture, guidData.stacks or 0)
+					Cursive.curses.sharedDebuffGuids[sharedDebuffKey][guid] = nil
 				end
-				-- v3.2.1 FIX: Use detection time from sharedDebuffGuids, not GetTime()
-				local startTime = (type(guidData) == "table" and guidData.time) or GetTime()
-				Cursive.curses:ApplySharedCurse(sharedDebuffKey, spellId, guid, startTime, liveTexture, finalStacks)
-				-- remove guid from pending list
-				Cursive.curses.sharedDebuffGuids[sharedDebuffKey][guid] = nil
-			elseif type(guidData) == "table" and guidData.spellID then
-				-- v3.2.1 FIX: Unit not scannable (not current target / out of range)
-				-- Apply using stored data from initial detection (ScanForProcDebuff etc.)
-				-- Timer will naturally expire; ScanTargetForSharedDebuffs cleans up on target
-				local startTime = guidData.time or GetTime()
-				Cursive.curses:ApplySharedCurse(sharedDebuffKey, guidData.spellID, guid, startTime, guidData.texture, guidData.stacks or 0)
-				Cursive.curses.sharedDebuffGuids[sharedDebuffKey][guid] = nil
 			end
 		end
 	end
@@ -1924,16 +1950,17 @@ local function DisplayGuid(guid)
 		-- Happens for cross-class spells that aren't in the player's spellbook (SpellInfo
 		-- returns nil → some init paths cache the "?" icon).
 		local textureData = Cursive.curses.trackedCurseIds[curseData.spellID]
+		local newTex = nil
 		if textureData and textureData.texture and not string.find(textureData.texture, "INV_Misc_QuestionMark", 1, true) then
-			curse:SetTexture(textureData.texture)
+			newTex = textureData.texture
 		elseif curseData.sharedTexture then
-			curse:SetTexture(curseData.sharedTexture)
+			newTex = curseData.sharedTexture
 		else
 			-- v3.2.1 FIX: Try SpellInfo first (works for any spell ID without needing target scan)
 			local siName, siRank, siTex = SpellInfo(curseData.spellID)
 			if siTex then
 				curseData.sharedTexture = siTex
-				curse:SetTexture(siTex)
+				newTex = siTex
 			else
 				-- Fallback: live scan target debuffs
 				local liveTex = nil
@@ -1948,13 +1975,20 @@ local function DisplayGuid(guid)
 						end
 					end
 				end
-				curse:SetTexture(liveTex or "Interface\\Icons\\INV_Misc_QuestionMark")
+				newTex = liveTex or "Interface\\Icons\\INV_Misc_QuestionMark"
 			end
 		end
 
-		curse:SetDesaturated(false)
-		curse:SetAlpha(1.0)
-		curse:SetTexCoord(0.078, 0.92, 0.079, 0.937)
+		-- v5.1.0-octo: only hit the driver when the texture (or ghost desat
+		-- state) actually changed — was 4 SetTexture-family calls per icon per tick
+		if curse._lastTex ~= newTex or curse._lastDesat then
+			curse._lastTex = newTex
+			curse._lastDesat = false
+			curse:SetTexture(newTex)
+			curse:SetTexCoord(0.078, 0.92, 0.079, 0.937)
+			curse:SetDesaturated(false)
+			curse:SetAlpha(1.0)
+		end
 
 		-- Timer display
 		local timerConfig = Cursive.db.profile
@@ -1978,14 +2012,25 @@ local function DisplayGuid(guid)
 		end
 
 		-- v4.0.3: Always use tostring() to prevent text clipping with numeric SetText
+		-- v5.1.0-octo: cache timer text — SetText forces a font-string relayout,
+		-- but the value only changes ~once per second while ticks run at 10 Hz
+		local timerText
+		local timerRed = false
 		if remaining >= 100 then
-			curse.timer:SetText(tostring(ceil((remaining - 30) / 60)) .. "m")
-			ApplyTimerColor()
+			timerText = tostring(ceil((remaining - 30) / 60)) .. "m"
 		elseif timerConfig.coloreddecimalduration and remaining < 5 and remaining >= 0 then
-			curse.timer:SetText(tostring(remaining))
+			timerText = tostring(remaining)
+			timerRed = true
+		else
+			timerText = tostring(remaining)
+		end
+		if curse.timer._lastText ~= timerText then
+			curse.timer._lastText = timerText
+			curse.timer:SetText(timerText)
+		end
+		if timerRed then
 			curse.timer:SetTextColor(1, 0, 0)
 		else
-			curse.timer:SetText(tostring(remaining))
 			ApplyTimerColor()
 		end
 		curse.timer:Show()
@@ -2070,22 +2115,20 @@ local function DisplayGuid(guid)
 	if Cursive.db.profile.showMissingDebuffs == true and guidCurses and Cursive.curses.sharedDebuffs then
 		local sd = Cursive.db.profile.shareddebuffs
 		if sd then
+			-- v5.1.0-octo: build the set of active debuff keys ONCE per bar, then
+			-- membership-test per enabled debuff (was O(debuffs x curses) with
+			-- inline string normalization per pair per tick).
+			local activeKeys = nil
+			for curseName, curseData in pairs(guidCurses) do
+				if not activeKeys then activeKeys = {} end
+				if curseData.sharedDebuffKey then
+					activeKeys[curseData.sharedDebuffKey] = true
+				end
+				local normalized = Cursive.curses.nameToNormalized[curseName] or string.gsub(string.lower(curseName), "[%s']", "")
+				activeKeys[normalized] = true
+			end
 			for debuffKey, enabled in pairs(sd) do
-				if enabled then
-					-- Check if already active on this target
-					local found = false
-					for curseName, curseData in pairs(guidCurses) do
-						if curseData.sharedDebuffKey == debuffKey then
-							found = true
-							break
-						end
-						local normalized = Cursive.curses.nameToNormalized[curseName] or string.gsub(string.lower(curseName), "[%s']", "")
-						if normalized == debuffKey then
-							found = true
-							break
-						end
-					end
-					if not found then
+				if enabled and not (activeKeys and activeKeys[debuffKey]) then
 						-- Get first spell from debuff meta for name/texture
 						local debuffMeta = Cursive.curses.sharedDebuffs[debuffKey]
 						if debuffMeta then
@@ -2111,7 +2154,6 @@ local function DisplayGuid(guid)
 							end
 						end
 					end
-				end
 			end
 		end
 	end
@@ -2141,10 +2183,15 @@ local function DisplayGuid(guid)
 				end
 				if targetCurse then
 					local tex = curseData.sharedTexture or "Interface\\Icons\\INV_Misc_QuestionMark"
-					targetCurse:SetTexture(tex)
-					targetCurse:SetTexCoord(0.078, 0.92, 0.079, 0.937)
-					targetCurse:SetDesaturated(true)
-					targetCurse:SetAlpha(0.5)
+					-- v5.1.0-octo: same texture/desat caching as RenderCurseIcon
+					if targetCurse._lastTex ~= tex or not targetCurse._lastDesat then
+						targetCurse._lastTex = tex
+						targetCurse._lastDesat = true
+						targetCurse:SetTexture(tex)
+						targetCurse:SetTexCoord(0.078, 0.92, 0.079, 0.937)
+						targetCurse:SetDesaturated(true)
+						targetCurse:SetAlpha(0.5)
+					end
 					targetCurse:Show()
 					targetCurse.timer:Hide()
 					if targetCurse.stackText then targetCurse.stackText:Hide() end
@@ -2314,6 +2361,24 @@ ui:SetScript("OnUpdate", function()
 	-- clear displayedGuids
 	for guid, _ in pairs(displayedGuids) do
 		displayedGuids[guid] = nil
+	end
+
+	-- v5.1.0-octo: invert pending shared-debuff applications once per tick
+	-- (DisplayGuid consumes entries per bar; this skips a full scan per bar)
+	for pendGuid in pairs(pendingByGuid) do
+		pendingByGuid[pendGuid] = nil
+	end
+	if Cursive.curses.sharedDebuffGuids then
+		for sharedDebuffKey, pendGuids in pairs(Cursive.curses.sharedDebuffGuids) do
+			for pendGuid in pairs(pendGuids) do
+				local set = pendingByGuid[pendGuid]
+				if not set then
+					set = {}
+					pendingByGuid[pendGuid] = set
+				end
+				set[sharedDebuffKey] = true
+			end
+		end
 	end
 
 	-- run through all guids and fill with bars

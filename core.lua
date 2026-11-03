@@ -41,8 +41,15 @@ local MAX_TRACK_RANGE = 300
 
 -- v4.0.6: Check if GUID is high-priority (target, raid-marked, or has our curses)
 -- v4.1.1: Moved above add() so both add() and addGuid() can enforce the cap.
-local function isHighPriorityGuid(guid)
-	local _, targetGuid = UnitExists("target")
+-- v5.1.0-octo: optional targetGuid param lets evictStale hoist the target
+-- lookup out of the per-GUID loop. nil = resolve here; false = no target.
+local function isHighPriorityGuid(guid, targetGuid)
+	if targetGuid == nil then
+		local _, t = UnitExists("target")
+		targetGuid = t
+	elseif targetGuid == false then
+		targetGuid = nil
+	end
 	if targetGuid and targetGuid == guid then return true end
 	if GetRaidTargetIndex(guid) then return true end
 	if Cursive.curses and Cursive.curses.guids and Cursive.curses.guids[guid] then return true end
@@ -104,8 +111,11 @@ end
 -- LRU_TTL (5 min) remains as a safety-valve for edge cases where UnitExists lies.
 Cursive.core.evictStale = function()
 	local now = GetTime()
+	-- v5.1.0-octo: resolve the current target once per sweep instead of once per GUID
+	local _, sweepTargetGuid = UnitExists("target")
+	sweepTargetGuid = sweepTargetGuid or false
 	for guid, lastSeen in pairs(Cursive.core.guids) do
-		if not isHighPriorityGuid(guid) then
+		if not isHighPriorityGuid(guid, sweepTargetGuid) then
 			local exists = UnitExists(guid)
 			local dead = exists and UnitIsDead(guid)
 			-- v4.1.3: Also evict if mob drifted beyond the 300y overall max track range.

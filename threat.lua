@@ -389,7 +389,10 @@ end
 
 ev:SetScript("OnEvent", function()
 	if event == "CHAT_MSG_ADDON" then
-		if arg2 and strfind(arg2, THREAT_API, 1, true) then
+		-- v5.1.0-octo: prefix gate instead of scanning every addon message.
+		-- TWT packets always start with the threat token; handlePacket still
+		-- searches internally, so this only skips non-TWT traffic cheaply.
+		if arg2 and strsub(arg2, 1, strlen(THREAT_API)) == THREAT_API then
 			handlePacket(arg2)
 		end
 	elseif event == "PLAYER_REGEN_DISABLED" then

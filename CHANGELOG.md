@@ -1,5 +1,47 @@
 # Changelog
 
+## v5.1.0-octo — 2026-11-03
+
+**tl;dr:** full audit follow-up — one slash-command dispatcher (no more triple-wrapped `/cursive`), options menu reads its version from the toc and remembers the last tab, Profiles tab registers through a real API instead of monkey-patching, ~1000 lines of dead AceConsole menu/XML deleted, right-click no longer toggles auto-attack off, and the 10 Hz render loop drops most of its per-tick texture/sort/scan overhead.
+
+### Menu robustness
+- **Single `/cursive` dispatcher (commands.lua)** — the handler was wrapped three times in three files (load-time in commands.lua, `PLAYER_LOGIN` in CursiveOptionsUI.lua, `PLAYER_LOGIN` + one-frame delay in profiles.lua) and only worked by accident of toc ordering. Now one route table: empty/`options`/`opt`/`config`/`settings` → toggle options, `help` → full help, `profile(s) save|load|delete|list`, `threat`/`threatstatus`/`threatdebug`/`threatvalue`, `curse`/`multicurse`/`target` fall through to casting logic.
+- **Bare subcommands fixed** — `/cursive curse` with no args printed "Unknown command" (pattern required a space); now prints usage.
+- **Options frame remembers the last tab** instead of resetting to General on every open.
+- **Version label** in the options title now reads from `GetAddOnMetadata` (was hardcoded `v4.1.4`).
+- **Stale load message fixed** — no longer mentions the removed minimap icon; points at `/cursive options` and `/cursive help`.
+- **`CursiveOpts.RegisterTab(label, panel, opts)`** — new tab-registration API in CursiveOptionsUI (auto-relayout, per-tab `onSelect`/scroll/button options). profilesUI registers its Profiles tab through it at file scope; the old PLAYER_LOGIN delay, hardcoded tab resizing, and `SelectTab` monkey-patch are gone.
+
+### Bug fixes
+- **Right-click no longer cancels your swing (ui.lua BarClick)** — `AttackTarget()` is a toggle in 1.12; it now only fires when the click actually changed the target, and guards on `UnitAffectingCombat("player")` instead of the frame-lagged `PlayerFrame.inCombat`.
+- **Non-pfUI health bar border anchored to nil** — the non-pfUI path parented/anchored the border to `healthBar.bar` (doesn't exist on a stock StatusBar); now parents to `healthBar`.
+- **Bar frames no longer reuse global names** — every bar used to overwrite the same `CursiveUnitFrame`/`CursiveHealthBar`/etc. globals; frames are now created unnamed.
+
+### Efficiency (10 Hz main loop)
+- **Missing-debuff ghost injection** — builds the per-bar active-key set once and membership-tests, instead of an O(debuffs × curses) scan with inline string normalization per pair per tick.
+- **Icon texture/timer caching** — `SetTexture`/`SetTexCoord`/`SetDesaturated`/`SetAlpha` and timer `SetText` now only run when the value actually changed (was: every icon, every tick).
+- **Pending shared-debuff map** — `sharedDebuffGuids` is inverted once per tick into a per-guid set; bars membership-test instead of scanning ~30 keys each.
+- **Sort comparator** — remaining times and ordering mode are precomputed before `tsort`; the comparator is pure number compares (no method calls or locale lookups per comparison).
+- **BarUpdate** fetches `UnitHealth`/`UnitHealthMax` once per tick (was twice).
+- **evictStale (core.lua)** resolves the current target GUID once per sweep instead of once per tracked GUID.
+- **Threat packet gate (threat.lua)** — `CHAT_MSG_ADDON` now prefix-compares the first bytes instead of `strfind`-scanning every addon message.
+
+### Housekeeping
+- Deleted `CursiveOptions.xml` + `CursiveTemplates.xml` (dead old options frame, frame-name collisions), the never-registered `Cursive.cmdtable` AceConsole menu tree (~900 lines incl. ~80 closures built per login), `core.lua.premigration`, and `.DS_Store` files. settings.lua: 1136 → 397 lines.
+
+---
+
+## v5.0.5-octo — 2026-11-01
+
+**tl;dr:** OctoWoW integration baseline — merged TWThreat (TWTv4 server feed) and TankPlates (client-side aggro resolution) into Cursive Raid 4.1.4; one addon replacing three. See README-OCTO.md for the full data-source breakdown.
+
+- threat.lua: TWTv4 packet parsing, per-creature tank-mode records, combat-gated requester.
+- Bars show aggro holder name + threat percent, class-colored by holder; pull warning at ≥90%.
+- Options UI gained a Threat settings section; `/cursive threat*` toggles.
+- Removed FuBar/Dewdrop/Tablet minimap plugin, test framework/overlay, and docs tree.
+
+---
+
 ## v4.1.4 — 2026-04-17
 
 Quick fix reported immediately after the v4.1.3 push.

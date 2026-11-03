@@ -15,10 +15,6 @@ local getglobal = getglobal
 -- Constants (matching CursiveOptionsUI.lua)
 -- ============================================================
 local FRAME_WIDTH = 338
-local TAB_GAP = 2
-local TAB_HEIGHT = 22
-local NEW_TAB_COUNT = 6
-local NEW_TAB_WIDTH = floor((FRAME_WIDTH - (NEW_TAB_COUNT - 1) * TAB_GAP) / NEW_TAB_COUNT)
 
 local PANEL_TOP_OFFSET = -48
 local PANEL_BOTTOM_OFFSET = 62
@@ -26,16 +22,7 @@ local PANEL_BOTTOM_OFFSET = 62
 local CONTENT_WIDTH = FRAME_WIDTH - 30  -- 308, used for reference
 local INNER_WIDTH = FRAME_WIDTH - 10 - 12 - 44  -- 272: +12 left (was -24) but -20 right (was -24, now -44)
 
--- Theme colors: helper to avoid unpack() for CursiveOptionsUI.lua style consistency
-local function SetTexColor(tex, r, g, b, a) tex:SetTexture(r, g, b, a) end
-local function SetFSColor(fs, r, g, b) fs:SetTextColor(r, g, b) end
-
 -- Color constants (r, g, b, a)
-local C_ACTIVE_TAB_R, C_ACTIVE_TAB_G, C_ACTIVE_TAB_B, C_ACTIVE_TAB_A = 0.25, 0.25, 0.25, 1
-local C_INACTIVE_TAB_R, C_INACTIVE_TAB_G, C_INACTIVE_TAB_B, C_INACTIVE_TAB_A = 0.15, 0.15, 0.15, 0.8
-local C_HOVER_TAB_R, C_HOVER_TAB_G, C_HOVER_TAB_B, C_HOVER_TAB_A = 0.3, 0.3, 0.3, 1
-local C_TEXT_ACTIVE_R, C_TEXT_ACTIVE_G, C_TEXT_ACTIVE_B = 1, 1, 1
-local C_TEXT_INACTIVE_R, C_TEXT_INACTIVE_G, C_TEXT_INACTIVE_B = 0.82, 0.82, 0.82
 local C_GOLD_R, C_GOLD_G, C_GOLD_B = 1, 0.82, 0
 local C_GREEN_R, C_GREEN_G, C_GREEN_B = 0, 1, 0
 local C_WHITE_R, C_WHITE_G, C_WHITE_B = 1, 1, 1
@@ -49,178 +36,30 @@ local includePosition = true
 local profilePanelBuilt = false
 
 -- ============================================================
--- Wait for CursiveOptionsFrame to exist, then inject tab 6
+-- Register the Profiles tab with the options UI (v5.1.0-octo)
+-- profilesUI.lua loads after CursiveOptionsUI.lua (see .toc), and
+-- CursiveOptionsFrame + CursiveOpts.RegisterTab exist at file scope,
+-- so no PLAYER_LOGIN delay, manual tab resizing, or SelectTab
+-- monkey-patching is needed. Invoked at the end of this file.
 -- ============================================================
-local initFrame = CreateFrame("Frame")
-initFrame:RegisterEvent("PLAYER_LOGIN")
-initFrame:SetScript("OnEvent", function()
-    initFrame:UnregisterEvent("PLAYER_LOGIN")
-
-    -- Delay one frame to ensure CursiveOptionsUI has created everything
-    local delayFrame = CreateFrame("Frame")
-    delayFrame:SetScript("OnUpdate", function()
-        this:Hide()
-        CursiveProfilesUI_Init()
-    end)
-    delayFrame:Show()
-end)
-
--- ============================================================
--- Main init function
--- ============================================================
-function CursiveProfilesUI_Init()
+local function RegisterProfilesTab()
+    if not CursiveOpts or not CursiveOpts.RegisterTab then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFCC00Cursive:|r Profiles tab unavailable: options UI does not support RegisterTab.")
+        return
+    end
     local mainFrame = getglobal("CursiveOptionsFrame")
     if not mainFrame then return end
 
-    -- --------------------------------------------------------
-    -- Resize existing 5 tabs + create tab 6 to fill edge-to-edge
-    -- --------------------------------------------------------
-    -- Calculate widths: distribute pixels evenly, extra goes to rightmost tabs
-    local totalGaps = (NEW_TAB_COUNT - 1) * TAB_GAP
-    local availWidth = FRAME_WIDTH - totalGaps
-    local baseWidth = floor(availWidth / NEW_TAB_COUNT)
-    local remainder = availWidth - (baseWidth * NEW_TAB_COUNT)
-    -- remainder pixels go to the LAST 'remainder' tabs (right-side absorbs slack)
-
-    local allTabNames = {
-        "CursiveTabGeneral", "CursiveTabRaid", "CursiveTabClass",
-        "CursiveTabDisplay", "CursiveTabFilter", "CursiveTabProfiles",
-    }
-
-    local prevTab = nil
-    for i, tName in ipairs(allTabNames) do
-        if i <= 5 then
-            -- Resize existing tabs
-            local tab = getglobal(tName)
-            if tab then
-                local w = baseWidth
-                if i > (NEW_TAB_COUNT - remainder) then w = w + 1 end
-                tab:SetWidth(w)
-                tab:ClearAllPoints()
-                if i == 1 then
-                    tab:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", 0, -(TAB_HEIGHT + 2))
-                else
-                    tab:SetPoint("LEFT", prevTab, "RIGHT", TAB_GAP, 0)
-                end
-                prevTab = tab
-            end
-        end
-    end
-
-    -- --------------------------------------------------------
-    -- Create tab 6: "Profiles"
-    -- --------------------------------------------------------
-    local tabName = "CursiveTabProfiles"
-    local tab6Width = baseWidth
-    if 6 > (NEW_TAB_COUNT - remainder) then tab6Width = tab6Width + 1 end
-    local tab6 = CreateFrame("Button", tabName, mainFrame)
-    tab6:SetWidth(tab6Width)
-    tab6:SetHeight(TAB_HEIGHT)
-    tab6:SetPoint("LEFT", prevTab, "RIGHT", TAB_GAP, 0)
-
-    local bg = tab6:CreateTexture(tabName .. "BG", "BACKGROUND")
-    bg:SetTexture(C_INACTIVE_TAB_R, C_INACTIVE_TAB_G, C_INACTIVE_TAB_B, C_INACTIVE_TAB_A)
-    bg:SetAllPoints(tab6)
-
-    local tabText = tab6:CreateFontString(tabName .. "Text", "ARTWORK", "GameFontNormalSmall")
-    tabText:SetPoint("CENTER", tab6, "CENTER", 0, 0)
-    tabText:SetText("Profiles")
-    tabText:SetTextColor(C_TEXT_INACTIVE_R, C_TEXT_INACTIVE_G, C_TEXT_INACTIVE_B)
-
-    tab6.tabIndex = 6
-
-    tab6:SetScript("OnEnter", function()
-        local bgTex = getglobal(this:GetName() .. "BG")
-        if this.tabIndex ~= CursiveProfilesUI_GetSelectedTab() then
-            bgTex:SetTexture(C_HOVER_TAB_R, C_HOVER_TAB_G, C_HOVER_TAB_B, C_HOVER_TAB_A)
-        end
-        getglobal(this:GetName() .. "Text"):SetTextColor(C_TEXT_ACTIVE_R, C_TEXT_ACTIVE_G, C_TEXT_ACTIVE_B)
-    end)
-    tab6:SetScript("OnLeave", function()
-        local bgTex = getglobal(this:GetName() .. "BG")
-        if this.tabIndex ~= CursiveProfilesUI_GetSelectedTab() then
-            bgTex:SetTexture(C_INACTIVE_TAB_R, C_INACTIVE_TAB_G, C_INACTIVE_TAB_B, C_INACTIVE_TAB_A)
-        end
-        getglobal(this:GetName() .. "Text"):SetTextColor(C_TEXT_INACTIVE_R, C_TEXT_INACTIVE_G, C_TEXT_INACTIVE_B)
-    end)
-    tab6:SetScript("OnClick", function()
-        CursiveOpts.SelectTab(6)
-    end)
-
-    -- --------------------------------------------------------
-    -- Create panel for tab 6
-    -- --------------------------------------------------------
     local panel = CreateFrame("Frame", "CursiveProfilesPanel", mainFrame)
     panel:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", 10, PANEL_TOP_OFFSET)
     panel:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT", 0, PANEL_BOTTOM_OFFSET - 16)
     panel:Hide()
 
-    -- --------------------------------------------------------
-    -- Hook into SelectTab to handle tab 6
-    -- --------------------------------------------------------
-    local originalSelectTab = CursiveOpts and CursiveOpts.SelectTab
+    CursiveOpts.RegisterTab("Profiles", panel, {
+        onSelect = function() CursiveProfilesUI_Refresh() end,
+    })
 
-    CursiveOpts.SelectTab = function(tabIndex)
-        -- Let original handle tabs 1-5
-        if originalSelectTab then originalSelectTab(tabIndex) end
-
-        -- Handle tab 6 visibility
-        local profilePanel = getglobal("CursiveProfilesPanel")
-        if profilePanel then
-            if tabIndex == 6 then
-                profilePanel:Show()
-                -- Hide other panels (original already hides them, but be safe)
-                for _, pName in ipairs({"CursiveGeneralPanel", "CursiveRaidPanel", "CursiveClassPanel", "CursiveDisplayPanel", "CursiveFilterPanel"}) do
-                    local p = getglobal(pName)
-                    if p then p:Hide() end
-                end
-                -- Hide buttons that belong to other tabs
-                local toggleAll = getglobal("CursiveToggleAllBtn")
-                if toggleAll then toggleAll:Hide() end
-                local resetFrame = getglobal("CursiveResetFrameBtn")
-                if resetFrame then resetFrame:Hide() end
-
-                CursiveProfilesUI_Refresh()
-            else
-                profilePanel:Hide()
-            end
-        end
-
-        -- Update tab 6 visuals
-        local tab6BG = getglobal("CursiveTabProfilesBG")
-        local tab6Text = getglobal("CursiveTabProfilesText")
-        if tab6BG and tab6Text then
-            if tabIndex == 6 then
-                tab6BG:SetTexture(C_ACTIVE_TAB_R, C_ACTIVE_TAB_G, C_ACTIVE_TAB_B, C_ACTIVE_TAB_A)
-                tab6Text:SetTextColor(C_TEXT_ACTIVE_R, C_TEXT_ACTIVE_G, C_TEXT_ACTIVE_B)
-            else
-                tab6BG:SetTexture(C_INACTIVE_TAB_R, C_INACTIVE_TAB_G, C_INACTIVE_TAB_B, C_INACTIVE_TAB_A)
-                tab6Text:SetTextColor(C_TEXT_INACTIVE_R, C_TEXT_INACTIVE_G, C_TEXT_INACTIVE_B)
-            end
-        end
-    end
-
-    -- --------------------------------------------------------
-    -- Build profile panel content
-    -- --------------------------------------------------------
     CursiveProfilesUI_BuildPanel(panel)
-end
-
--- Helper to get current selected tab (read from the tab highlight state)
-function CursiveProfilesUI_GetSelectedTab()
-    -- Check which tab has active color
-    local tabs = {"CursiveTabGeneral","CursiveTabRaid","CursiveTabClass","CursiveTabDisplay","CursiveTabFilter","CursiveTabProfiles"}
-    for i, name in ipairs(tabs) do
-        local panel
-        if i <= 5 then
-            local pNames = {"CursiveGeneralPanel","CursiveRaidPanel","CursiveClassPanel","CursiveDisplayPanel","CursiveFilterPanel"}
-            panel = getglobal(pNames[i])
-        else
-            panel = getglobal("CursiveProfilesPanel")
-        end
-        if panel and panel:IsShown() then return i end
-    end
-    return 1
 end
 
 -- ============================================================
@@ -757,7 +596,7 @@ function CursiveProfilesUI_UpdateSelectedDisplay()
 end
 
 -- ============================================================
--- Refresh (called when tab 6 is selected)
+-- Refresh (called when the Profiles tab is selected)
 -- ============================================================
 function CursiveProfilesUI_Refresh()
     CursiveProfilesUI_UpdateSelectedDisplay()
@@ -768,3 +607,7 @@ function CursiveProfilesUI_Refresh()
         posCB:SetChecked(includePosition)
     end
 end
+
+-- Register at file scope: CursiveOptionsUI.lua has already run (toc order),
+-- and all CursiveProfilesUI_* globals above are now defined.
+RegisterProfilesTab()
