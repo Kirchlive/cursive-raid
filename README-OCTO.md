@@ -1,4 +1,4 @@
-# Cursive Raid Threat (v5.1-octo)
+# Cursive Raid Threat (v5.1.1-octo)
 
 One addon replacing three: **Cursive Raid** (debuff bars) + **TWThreat** (threat
 meter) + **TankPlates** (aggro coloring). Base: Kirchlive cursive-raid 4.1.4.

@@ -753,20 +753,33 @@ ui.BarUpdate = function()
 	end
 end
 
+-- v5.1.1-octo: debounce timestamp for the right-click attack guard,
+-- shared across all bars (a per-bar timer would let a fast click on a
+-- second bar toggle the swing back off).
+local lastAttackClick = 0
+
 ui.BarClick = function()
 	-- v3.2.1: Block targeting for test overlay GUIDs
 	if IsTestGuid(this.parent.guid) then return end
 	if arg1 == "LeftButton" then
 		TargetUnit(this.parent.guid)
 	elseif arg1 == "RightButton" then
-		-- v5.1.0-octo: AttackTarget() is a TOGGLE in 1.12 — only start the
-		-- swing when the click actually changed the target, and guard on the
-		-- real combat state (PlayerFrame.inCombat lags a frame).
-		local _, cur = UnitExists("target")
-		local sameTarget = (cur == this.parent.guid)
 		TargetUnit(this.parent.guid)
-		if not sameTarget and not UnitAffectingCombat("player") then
-			AttackTarget()
+		-- v5.1.0-octo: AttackTarget() is a TOGGLE in 1.12. When out of combat
+		-- the player is not swinging, so calling it can only START the attack —
+		-- always safe, also when the clicked bar is already the target.
+		-- When in combat the attack state carries over on target switch, so
+		-- calling it there would toggle the swing OFF — never call it.
+		-- v5.1.1-octo: debounce covers the ~1 frame lag between AttackTarget()
+		-- and UnitAffectingCombat("player") going true (double right-click in
+		-- the same window used to cancel the swing; PlayerFrame.inCombat lags
+		-- even longer, hence the live API).
+		if not UnitAffectingCombat("player") then
+			local now = GetTime()
+			if now - lastAttackClick > 0.5 then
+				lastAttackClick = now
+				AttackTarget()
+			end
 		end
 	end
 end

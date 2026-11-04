@@ -1,5 +1,14 @@
 # Changelog
 
+## v5.1.1-octo — 2026-11-04
+
+**tl;dr:** hotfix for a v5.1.0 regression — right-clicking a bar no longer started auto-attack at all.
+
+### Bug Fixes
+- **Right-click auto-attack restored (ui.lua BarClick)** — the v5.1.0 guard only called `AttackTarget()` when the click *changed* the target, so the standard flow (left-click a bar to target, right-click to start swinging) never fired it. Dropped the same-target check: out of combat the player is never swinging, so `AttackTarget()` can only *start* the attack there; in combat the attack state carries across target switches, so it's never called. Kept the toggle-off protection as a 0.5 s debounce shared across all bars, which covers the ~1 frame lag between `AttackTarget()` and `UnitAffectingCombat("player")` going true.
+
+---
+
 ## v5.1.0-octo — 2026-11-03
 
 **tl;dr:** full audit follow-up — one slash-command dispatcher (no more triple-wrapped `/cursive`), options menu reads its version from the toc and remembers the last tab, Profiles tab registers through a real API instead of monkey-patching, ~1000 lines of dead AceConsole menu/XML deleted, right-click no longer toggles auto-attack off, and the 10 Hz render loop drops most of its per-tick texture/sort/scan overhead.
