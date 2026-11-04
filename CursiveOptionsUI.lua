@@ -57,6 +57,11 @@ local panelFrameNames = {
     "CursiveGeneralPanel", "CursiveRaidPanel", "CursiveClassPanel",
     "CursiveDisplayPanel", "CursiveFilterPanel",
 }
+-- Tab registry (v5.1.0-octo): buttons/panels/behavior by index.
+-- Tabs 1-5 are built below; extra tabs come from CursiveOpts.RegisterTab.
+local tabButtons = {}
+local tabPanels = {}
+local tabOptions = {}
 
 -- Class colors for sub-tabs (including Procs)
 local CLASS_COLORS = {
@@ -85,6 +90,7 @@ local GENERAL_KEYS = {
     "enabled", "clickthrough", "showbackdrop", "invertbars",
     "expandupwards", "showtargetindicator", "showraidicons", "showhealthbar",
     "showunitname", "alwaysshowcurrenttarget", "coloreddecimalduration",
+    "threatenabled", "threatstacked", "threatholdername", "threatvalue", "threatpullwarn",
 }
 local DISPLAY_KEYS = {
     "scale", "opacity", "fontscale", "maxcurses", "maxrow", "maxcol", "spacing", "debufficonspacing",
@@ -104,6 +110,7 @@ local DEFAULTS = {
     invertbars = false, expandupwards = false, showtargetindicator = false,
     showraidicons = true, showhealthbar = true, showunitname = true,
     alwaysshowcurrenttarget = false, coloreddecimalduration = false,
+    threatenabled = true, threatstacked = true, threatholdername = true, threatvalue = false, threatpullwarn = true,
     scale = 1.0, opacity = 1.0, fontscale = 1.0,
     maxcurses = 14, maxrow = 8, maxcol = 1, spacing = 3, debufficonspacing = 1,
     healthwidth = 100, height = 18, raidiconsize = 18, curseiconsize = 18,
@@ -669,7 +676,7 @@ title:SetText("Cursive Raid")
 local versionText = titleFrame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 versionText:SetPoint("BOTTOMLEFT", title, "BOTTOMRIGHT", 3, 1)
 versionText:SetFont(STANDARD_TEXT_FONT, 8, "")
-versionText:SetText("v4.1.4")
+versionText:SetText("v" .. (GetAddOnMetadata("Cursive-Raid", "Version") or "?"))
 versionText:SetTextColor(1, 1, 1)
 
 -- Close button (scaled to fit title bar, 1px from edges)
@@ -689,10 +696,10 @@ mainFrame:RegisterForDrag("LeftButton")
 mainFrame:SetScript("OnDragStart", function() this:StartMoving() end)
 mainFrame:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
 
--- OnShow -> Initialize + select tab 1
+-- OnShow -> Initialize + reselect the last active tab (v5.1.0-octo: no forced reset to tab 1)
 mainFrame:SetScript("OnShow", function()
     if CursiveOpts.Initialize then CursiveOpts.Initialize() end
-    if CursiveOpts.SelectTab then CursiveOpts.SelectTab(1) end
+    if CursiveOpts.SelectTab then CursiveOpts.SelectTab(selectedTab) end
 end)
 
 
@@ -724,20 +731,22 @@ for i = 1, TAB_COUNT do
     tabText:SetPoint("CENTER", tab, "CENTER", 0, 0)
     tabText:SetText(tabLabels[i])
 
+    -- Refs used by SelectTab / hover handlers (no getglobal lookups)
+    tab.bgTex = bg
+    tab.textObj = tabText
+
     -- Hover effects
     tab:SetScript("OnEnter", function()
-        local bgTex = getglobal(this:GetName() .. "BG")
         if this.tabIndex ~= selectedTab then
-            bgTex:SetTexture(0.3, 0.3, 0.3, 1)
+            this.bgTex:SetTexture(0.3, 0.3, 0.3, 1)
         end
-        getglobal(this:GetName() .. "Text"):SetTextColor(1, 1, 1)
+        this.textObj:SetTextColor(1, 1, 1)
     end)
     tab:SetScript("OnLeave", function()
-        local bgTex = getglobal(this:GetName() .. "BG")
         if this.tabIndex ~= selectedTab then
-            bgTex:SetTexture(0.15, 0.15, 0.15, 0.8)
+            this.bgTex:SetTexture(0.15, 0.15, 0.15, 0.8)
         end
-        getglobal(this:GetName() .. "Text"):SetTextColor(0.82, 0.82, 0.82)
+        this.textObj:SetTextColor(0.82, 0.82, 0.82)
     end)
 
     tab.tabIndex = i
@@ -745,7 +754,83 @@ for i = 1, TAB_COUNT do
         CursiveOpts.SelectTab(this.tabIndex)
     end)
 
+    tabButtons[i] = tab
     prevTab = tab
+end
+
+-- Re-lay out all tab buttons to fill the frame edge-to-edge (v5.1.0-octo).
+-- Extra pixels from integer division go to the rightmost tabs.
+local function RelayoutTabs()
+    local count = getn(tabButtons)
+    if count == 0 then return end
+    local availWidth = FRAME_WIDTH - (count - 1) * TAB_GAP
+    local baseWidth = floor(availWidth / count)
+    local remainder = availWidth - (baseWidth * count)
+    local prev = nil
+    for i = 1, count do
+        local tab = tabButtons[i]
+        local w = baseWidth
+        if i > (count - remainder) then w = w + 1 end
+        tab:SetWidth(w)
+        tab:ClearAllPoints()
+        if i == 1 then
+            tab:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", 0, -(TAB_HEIGHT + 2))
+        else
+            tab:SetPoint("LEFT", prev, "RIGHT", TAB_GAP, 0)
+        end
+        prev = tab
+    end
+end
+
+-- Public tab registration API (v5.1.0-octo).
+-- label: tab text. panel: content frame (shown/hidden by SelectTab).
+-- opts: { onSelect = fn, scrollFrame = frame-or-name, showToggleAll = bool, showResetFrame = bool }
+-- Returns the new tab index, or nil on failure.
+function CursiveOpts.RegisterTab(label, panel, opts)
+    if type(label) ~= "string" or not panel then return nil end
+
+    local index = getn(tabButtons) + 1
+
+    local tab = CreateFrame("Button", nil, mainFrame)
+    tab:SetHeight(TAB_HEIGHT)
+    tab:EnableMouse(true)
+
+    local bg = tab:CreateTexture(nil, "BACKGROUND")
+    bg:SetTexture(0.15, 0.15, 0.15, 0.8)
+    bg:SetAllPoints(tab)
+
+    local tabText = tab:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    tabText:SetPoint("CENTER", tab, "CENTER", 0, 0)
+    tabText:SetText(label)
+    tabText:SetTextColor(0.82, 0.82, 0.82)
+
+    tab.bgTex = bg
+    tab.textObj = tabText
+    tab.tabIndex = index
+
+    tab:SetScript("OnEnter", function()
+        if this.tabIndex ~= selectedTab then
+            this.bgTex:SetTexture(0.3, 0.3, 0.3, 1)
+        end
+        this.textObj:SetTextColor(1, 1, 1)
+    end)
+    tab:SetScript("OnLeave", function()
+        if this.tabIndex ~= selectedTab then
+            this.bgTex:SetTexture(0.15, 0.15, 0.15, 0.8)
+        end
+        this.textObj:SetTextColor(0.82, 0.82, 0.82)
+    end)
+    tab:SetScript("OnClick", function()
+        CursiveOpts.SelectTab(this.tabIndex)
+    end)
+
+    tabButtons[index] = tab
+    tabPanels[index] = panel
+    tabOptions[index] = opts or {}
+    panel:Hide()
+
+    RelayoutTabs()
+    return index
 end
 
 
@@ -841,8 +926,23 @@ _, y = CreateRow(genChild, "CursiveOptEnabled", y, "Enabled", "checkbox", "enabl
 _, y = CreateRow(genChild, "CursiveOptMove", y, "Move UI Frame", "checkbox", "move_special",
     { tooltipText = "Enable to move and show frame background. Disable to lock." })
 
-_, y = CreateRow(genChild, "CursiveOptTestOverlay", y, "Test Overlay", "checkbox", "testoverlay_special",
-    { tooltipText = "Show fake raid targets with debuffs for live UI preview. Disable to clear." })
+-- Header: Threat (TWTv4 server feed -- party/raid only)
+_, y = CreateRow(genChild, "CursiveGenHdrThreat", y, "Threat", "header")
+
+_, y = CreateRow(genChild, "CursiveOptThreatEnabled", y, "Enable Threat Module", "checkbox", "threatenabled",
+    { tooltipText = "Color bars by who holds aggro and show threat on each bar. Uses the server threat feed (TWTv4); only active in a party or raid." })
+
+_, y = CreateRow(genChild, "CursiveOptThreatStacked", y, "Stacked Threat Text (2 lines)", "checkbox", "threatstacked",
+    { tooltipText = "Put enemy name + HP on the top line and the aggro holder on a second line. Raise Bar Height (Display tab) to ~24-28 for comfortable spacing." })
+
+_, y = CreateRow(genChild, "CursiveOptThreatName", y, "Show Aggro Holder Name", "checkbox", "threatholdername",
+    { tooltipText = "Show the name of the character holding aggro on each bar" })
+
+_, y = CreateRow(genChild, "CursiveOptThreatValue", y, "Raw Value On Target", "checkbox", "threatvalue",
+    { tooltipText = "On your current target, show your raw threat value instead of percent" })
+
+_, y = CreateRow(genChild, "CursiveOptThreatPullWarn", y, "Pull Warning", "checkbox", "threatpullwarn",
+    { tooltipText = "Turn the threat text red on your target when your threat reaches 90% of the aggro holder" })
 
 -- Header: Display
 _, y = CreateRow(genChild, "CursiveGenHdrDisplay", y, "Display", "header")
@@ -2708,7 +2808,7 @@ RebuildFilterContent = function()
                 removeBtn:SetHeight(18)
                 removeBtn:SetPoint("RIGHT", entry, "RIGHT", -16, 0)
 
-                local removeTex = removeBtn:CreateTexture(entryName .. "RemoveTex", "ARTWORK")
+                local removeTex = removeBtn:CreateTexture(entryName .. "RemoveBtnTex", "ARTWORK")
                 removeTex:SetTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Up")
                 removeTex:SetAllPoints(removeBtn)
 
@@ -2851,21 +2951,25 @@ function CursiveOpts.SelectTab(tabIndex)
     selectedTab = tabIndex
 
     -- Update tab visuals
-    for i = 1, getn(tabButtonNames) do
-        local bgTex = getglobal(tabButtonNames[i] .. "BG")
-        local textObj = getglobal(tabButtonNames[i] .. "Text")
-        if i == tabIndex then
-            if bgTex then bgTex:SetTexture(0.25, 0.25, 0.25, 1) end
-            if textObj then textObj:SetTextColor(1, 1, 1) end
-        else
-            if bgTex then bgTex:SetTexture(0.15, 0.15, 0.15, 0.8) end
-            if textObj then textObj:SetTextColor(0.82, 0.82, 0.82) end
+    for i = 1, getn(tabButtons) do
+        local tab = tabButtons[i]
+        if tab and tab.bgTex and tab.textObj then
+            if i == tabIndex then
+                tab.bgTex:SetTexture(0.25, 0.25, 0.25, 1)
+                tab.textObj:SetTextColor(1, 1, 1)
+            else
+                tab.bgTex:SetTexture(0.15, 0.15, 0.15, 0.8)
+                tab.textObj:SetTextColor(0.82, 0.82, 0.82)
+            end
         end
     end
 
-    -- Show/hide panels
-    for i = 1, getn(panelFrameNames) do
-        local panel = getglobal(panelFrameNames[i])
+    -- Show/hide panels (registered panels by ref, built-in by global name)
+    for i = 1, getn(tabButtons) do
+        local panel = tabPanels[i]
+        if not panel and panelFrameNames[i] then
+            panel = getglobal(panelFrameNames[i])
+        end
         if panel then
             if i == tabIndex then
                 panel:Show()
@@ -2876,37 +2980,45 @@ function CursiveOpts.SelectTab(tabIndex)
     end
 
     -- Reset scroll to top and update scroll state after panel visibility change
-    -- Tab order: 1=General, 2=Raid, 3=Class, 4=Display, 5=Filter
-    local scrollNames = {
-        "CursiveGeneralScroll", "CursiveRaidScroll",
-        nil, "CursiveDisplayScroll", "CursiveFilterScroll"
-    }
-    local sfName = scrollNames[tabIndex]
-    if sfName then
-        local sf = getglobal(sfName)
-        if sf then
-            sf:SetVerticalScroll(0)
-            if sf.update_scroll_state then
-                sf.update_scroll_state()
-            end
+    -- Tab order: 1=General, 2=Raid, 3=Class, 4=Display, 5=Filter, 6+=registered
+    local opts = tabOptions[tabIndex]
+    local sf = nil
+    if opts and opts.scrollFrame then
+        if type(opts.scrollFrame) == "string" then
+            sf = getglobal(opts.scrollFrame)
+        else
+            sf = opts.scrollFrame
+        end
+    else
+        local scrollNames = {
+            "CursiveGeneralScroll", "CursiveRaidScroll",
+            nil, "CursiveDisplayScroll", "CursiveFilterScroll"
+        }
+        local sfName = scrollNames[tabIndex]
+        if sfName then sf = getglobal(sfName) end
+    end
+    if sf then
+        sf:SetVerticalScroll(0)
+        if sf.update_scroll_state then
+            sf.update_scroll_state()
         end
     end
 
-    -- Show/hide Toggle All button (only Raid + Class tabs)
-    if tabIndex == 2 or tabIndex == 3 then
+    -- Show/hide Toggle All button (Raid + Class tabs, or opted-in registered tabs)
+    if tabIndex == 2 or tabIndex == 3 or (opts and opts.showToggleAll) then
         toggleAllBtn:Show()
     else
         toggleAllBtn:Hide()
     end
 
-    -- Show/hide Reset Frame button (only General tab)
-    if tabIndex == 1 then
+    -- Show/hide Reset Frame button (General tab, or opted-in registered tabs)
+    if tabIndex == 1 or (opts and opts.showResetFrame) then
         resetFrameBtn:Show()
     else
         resetFrameBtn:Hide()
     end
 
-    -- Tab-specific refresh (2=Raid, 3=Class, 5=Filter)
+    -- Tab-specific refresh (2=Raid, 3=Class, 5=Filter; registered tabs via onSelect)
     if tabIndex == 2 then
         -- Raid tab
         BuildRaidContent()
@@ -2921,6 +3033,9 @@ function CursiveOpts.SelectTab(tabIndex)
     elseif tabIndex == 5 then
         -- Filter tab
         RebuildFilterContent()
+    end
+    if opts and opts.onSelect then
+        opts.onSelect()
     end
 end
 
@@ -2937,7 +3052,6 @@ function CursiveOpts.Initialize()
     -- General tab checkboxes
     CursiveOpts.SetCheckbox("CursiveOptEnabled", p.enabled)
     CursiveOpts.SetCheckbox("CursiveOptMove", not p.clickthrough)
-    CursiveOpts.SetCheckbox("CursiveOptTestOverlay", CursiveTestOverlay_IsActive and CursiveTestOverlay_IsActive() or false)
     CursiveOpts.SetCheckbox("CursiveOptHealthBar", p.showhealthbar)
     CursiveOpts.SetCheckbox("CursiveOptUnitName", p.showunitname)
     CursiveOpts.SetCheckbox("CursiveOptRaidIcons", p.showraidicons)
@@ -2946,6 +3060,11 @@ function CursiveOpts.Initialize()
     CursiveOpts.SetCheckbox("CursiveOptAlwaysTarget", p.alwaysshowcurrenttarget)
     CursiveOpts.SetCheckbox("CursiveOptCCTransparency", p.cctransparency)
     CursiveOpts.SetCheckbox("CursiveOptOORStripes", p.oorstripes)
+    CursiveOpts.SetCheckbox("CursiveOptThreatEnabled", p.threatenabled)
+    CursiveOpts.SetCheckbox("CursiveOptThreatStacked", p.threatstacked)
+    CursiveOpts.SetCheckbox("CursiveOptThreatName", p.threatholdername)
+    CursiveOpts.SetCheckbox("CursiveOptThreatValue", p.threatvalue)
+    CursiveOpts.SetCheckbox("CursiveOptThreatPullWarn", p.threatpullwarn)
     CursiveOpts.SetCheckbox("CursiveRaidShowMissing", p.showMissingDebuffs)
     CursiveOpts.SetCheckbox("CursiveRaidIncludeOwn", p.includeOwnRaidInOrder)
 
@@ -3123,19 +3242,6 @@ function CursiveOpts.ToggleOption(configKey)
         -- Update the checkbox visual (checked = moveable = NOT clickthrough)
         local cb = getglobal("CursiveOptMoveCheck")
         if cb then cb:SetChecked(not p.clickthrough) end
-        return
-    end
-
-    if configKey == "testoverlay_special" then
-        -- Toggle Test Overlay
-        if CursiveTestOverlay_IsActive and CursiveTestOverlay_IsActive() then
-            CursiveTestOverlay_Disable()
-        else
-            CursiveTestOverlay_Enable()
-        end
-        -- Update checkbox visual
-        local cb = getglobal("CursiveOptTestOverlayCheck")
-        if cb then cb:SetChecked(CursiveTestOverlay_IsActive and CursiveTestOverlay_IsActive()) end
         return
     end
 
@@ -3573,45 +3679,6 @@ StaticPopupDialogs["CURSIVE_ADD_IGNORE"] = {
     hideOnEscape = 1,
 }
 
-
--- ============================================================
--- 10. Slash command integration
--- Deferred to PLAYER_LOGIN so AceConsole has registered first
--- ============================================================
-local slashHookFrame = CreateFrame("Frame")
-slashHookFrame:RegisterEvent("PLAYER_LOGIN")
-slashHookFrame:SetScript("OnEvent", function()
-    slashHookFrame:UnregisterEvent("PLAYER_LOGIN")
-
-    local originalSlashHandler = SlashCmdList["CURSIVE"]
-
-    SlashCmdList["CURSIVE"] = function(msg, editbox)
-        if not msg or msg == "" then
-            if CursiveOptionsFrame then
-                if CursiveOptionsFrame:IsShown() then
-                    CursiveOptionsFrame:Hide()
-                else
-                    CursiveOptionsFrame:Show()
-                end
-            end
-            return
-        end
-
-        local lowerMsg = string.lower(msg)
-        if lowerMsg == "options" or lowerMsg == "opt" or lowerMsg == "config" or lowerMsg == "settings" then
-            if CursiveOptionsFrame then
-                if CursiveOptionsFrame:IsShown() then
-                    CursiveOptionsFrame:Hide()
-                else
-                    CursiveOptionsFrame:Show()
-                end
-            end
-            return
-        end
-
-        -- Fall through to original handler
-        if originalSlashHandler then
-            originalSlashHandler(msg, editbox)
-        end
-    end
-end)
+-- NOTE (v5.1.0-octo): slash-command routing lives solely in commands.lua.
+-- The old PLAYER_LOGIN wrapper that re-bound SlashCmdList["CURSIVE"] here
+-- was removed; /cursive and /cursive options are handled by the dispatcher.

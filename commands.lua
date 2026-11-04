@@ -93,44 +93,28 @@ local function parseOptions(optionsStr)
 	return options
 end
 
-local function handleSlashCommands(msg, editbox)
-	if not msg or msg == "" then
-		DEFAULT_CHAT_FRAME:AddMessage(curseCommands)
-		for _, description in pairs(commands) do
-			DEFAULT_CHAT_FRAME:AddMessage(description)
-		end
-		DEFAULT_CHAT_FRAME:AddMessage(priorityChoices)
-		for priority, description in pairs(priorities) do
-			DEFAULT_CHAT_FRAME:AddMessage("|CFFFFFF00" .. priority .. "|R: " .. description)
-		end
+local function printFullHelp()
+	DEFAULT_CHAT_FRAME:AddMessage(curseCommands)
+	for _, description in pairs(commands) do
+		DEFAULT_CHAT_FRAME:AddMessage(description)
+	end
+	DEFAULT_CHAT_FRAME:AddMessage(priorityChoices)
+	for priority, description in pairs(priorities) do
+		DEFAULT_CHAT_FRAME:AddMessage("|CFFFFFF00" .. priority .. "|R: " .. description)
+	end
 
-		DEFAULT_CHAT_FRAME:AddMessage(curseOptions)
-		for option, description in pairs(commandOptions) do
-			DEFAULT_CHAT_FRAME:AddMessage("|CFFFFFF00" .. option .. "|R: " .. description)
-		end
-		return
+	DEFAULT_CHAT_FRAME:AddMessage(curseOptions)
+	for option, description in pairs(commandOptions) do
+		DEFAULT_CHAT_FRAME:AddMessage("|CFFFFFF00" .. option .. "|R: " .. description)
 	end
-	-- get first word in string
-	local _, _, command, args = string.find(msg, "(%w+) (.*)")
-	if command == "curse" then
-		local spellName, targetedGuid, optionsStr = Cursive.utils.strsplit("|", args)
-		local options = parseOptions(optionsStr)
-		Cursive:Curse(spellName, targetedGuid, options)
-	elseif command == "multicurse" then
-		local spellName, priority, optionsStr = Cursive.utils.strsplit("|", args)
-		local options = parseOptions(optionsStr)
-		Cursive:Multicurse(spellName, priority, options)
-	elseif command == "target" then
-		local spellName, priority, optionsStr = Cursive.utils.strsplit("|", args)
-		local options = parseOptions(optionsStr)
-		Cursive:Target(spellName, priority, options)
-	else
-		DEFAULT_CHAT_FRAME:AddMessage(L["|cffffcc00Cursive:|cffffaaaa Unknown command."])
-		DEFAULT_CHAT_FRAME:AddMessage(curseCommands)
-		for _, description in pairs(commands) do
-			DEFAULT_CHAT_FRAME:AddMessage(description)
-		end
+end
+
+local function printBriefHelp()
+	DEFAULT_CHAT_FRAME:AddMessage(curseCommands)
+	for _, description in pairs(commands) do
+		DEFAULT_CHAT_FRAME:AddMessage(description)
 	end
+	DEFAULT_CHAT_FRAME:AddMessage(L["|cffffcc00Cursive:|cffffaaaa /cursive options (settings), /cursive profile <save|load|delete|list>, /cursive threat, /cursive help for full help."])
 end
 
 local crowdControlledSpellIds = {
@@ -638,5 +622,125 @@ function Cursive:Target(spellName, priority, options)
 	return false
 end
 
+-- ============================================================
+-- Single slash command dispatcher (v5.1.0-octo)
+-- One entry point, one route table. Replaces the old chain of
+-- PLAYER_LOGIN wrappers in CursiveOptionsUI.lua / profiles.lua.
+-- Routes:
+--   (empty)                 -> toggle options frame
+--   options|opt|config|settings -> toggle options frame
+--   help                    -> full help text
+--   curse|multicurse|target -> cast/targeting logic below
+--   profile|profiles save|load|delete|list [name]
+--   threat|threatstatus|threatdebug|threatvalue
+-- ============================================================
 SLASH_CURSIVE1 = "/cursive" --creating the slash command
-SlashCmdList["CURSIVE"] = handleSlashCommands --associating the function with the slash command
+SlashCmdList["CURSIVE"] = function(msg)
+	msg = msg or ""
+	-- trim and split into first word + rest (handles bare subcommands)
+	local _, _, cmd, rest = string.find(msg, "^%s*(%w*)%s*(.-)%s*$")
+	cmd = string.lower(cmd or "")
+	rest = rest or ""
+
+	-- options menu
+	if cmd == "" or cmd == "options" or cmd == "opt" or cmd == "config" or cmd == "settings" then
+		if Cursive_ToggleOptions then
+			Cursive_ToggleOptions()
+		elseif CursiveOptionsFrame then
+			if CursiveOptionsFrame:IsShown() then
+				CursiveOptionsFrame:Hide()
+			else
+				CursiveOptionsFrame:Show()
+			end
+		else
+			printFullHelp()
+		end
+		return
+	end
+
+	if cmd == "help" then
+		printFullHelp()
+		return
+	end
+
+	-- profiles
+	if cmd == "profile" or cmd == "profiles" then
+		if not Cursive.profiles then
+			printBriefHelp()
+			return
+		end
+		local _, _, subcmd, name = string.find(string.lower(rest), "^(%w+)%s*(.-)%s*$")
+		if subcmd == "save" and name and name ~= "" then
+			Cursive.profiles.Save(name)
+		elseif subcmd == "load" and name and name ~= "" then
+			Cursive.profiles.Load(name)
+		elseif subcmd == "delete" and name and name ~= "" then
+			Cursive.profiles.Delete(name)
+		elseif subcmd == "list" then
+			local names = Cursive.profiles.List()
+			if table.getn(names) == 0 then
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFCC00Cursive:|r No saved profiles.")
+			else
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFCC00Cursive Profiles:|r " .. table.concat(names, ", "))
+			end
+		else
+			DEFAULT_CHAT_FRAME:AddMessage("|cFFFFCC00Cursive:|r Usage: /cursive profile <save|load|delete|list> [name]")
+		end
+		return
+	end
+
+	-- threat module
+	if cmd == "threat" then
+		local p = Cursive.db and Cursive.db.profile
+		if p then
+			p.threatenabled = not p.threatenabled
+			DEFAULT_CHAT_FRAME:AddMessage("|cffffcc00Cursive:|r threat module " ..
+				(p.threatenabled and "|cff00ff00ON|r" or "|cffff5555OFF|r"))
+		end
+		return
+	elseif cmd == "threatstatus" then
+		if Cursive.threat then
+			DEFAULT_CHAT_FRAME:AddMessage("|cffffcc00Cursive threat:|r " .. Cursive.threat.statusLine())
+			if Cursive.threat.stats.lastRaw ~= "" then
+				DEFAULT_CHAT_FRAME:AddMessage("|cff888888last packet:|r " .. Cursive.threat.stats.lastRaw)
+			end
+		end
+		return
+	elseif cmd == "threatdebug" then
+		if Cursive.threat then
+			Cursive.threat.debug = not Cursive.threat.debug
+			DEFAULT_CHAT_FRAME:AddMessage("|cffffcc00Cursive:|r threat debug " ..
+				(Cursive.threat.debug and "|cff00ff00ON|r -- requests and packets will print to chat" or "|cffff5555OFF|r"))
+		end
+		return
+	elseif cmd == "threatvalue" then
+		local p = Cursive.db and Cursive.db.profile
+		if p then
+			p.threatvalue = not p.threatvalue
+			DEFAULT_CHAT_FRAME:AddMessage("|cffffcc00Cursive:|r target shows " ..
+				(p.threatvalue and "raw threat value" or "threat percent"))
+		end
+		return
+	end
+
+	-- curse family (rest may be empty -> prints usage for that command)
+	if cmd == "curse" then
+		local spellName, targetedGuid, optionsStr = Cursive.utils.strsplit("|", rest)
+		local options = parseOptions(optionsStr)
+		Cursive:Curse(spellName, targetedGuid, options)
+		return
+	elseif cmd == "multicurse" then
+		local spellName, priority, optionsStr = Cursive.utils.strsplit("|", rest)
+		local options = parseOptions(optionsStr)
+		Cursive:Multicurse(spellName, priority, options)
+		return
+	elseif cmd == "target" then
+		local spellName, priority, optionsStr = Cursive.utils.strsplit("|", rest)
+		local options = parseOptions(optionsStr)
+		Cursive:Target(spellName, priority, options)
+		return
+	end
+
+	DEFAULT_CHAT_FRAME:AddMessage(L["|cffffcc00Cursive:|cffffaaaa Unknown command."])
+	printBriefHelp()
+end

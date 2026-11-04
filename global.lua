@@ -140,7 +140,7 @@ function Cursive:OnEnable()
 		}
 	end
 
-	DEFAULT_CHAT_FRAME:AddMessage(L["|cffffcc00Cursive:|cffffaaaa Loaded.  /cursive for commands and minimap icon for options."])
+	DEFAULT_CHAT_FRAME:AddMessage(L["|cffffcc00Cursive:|cffffaaaa Loaded.  /cursive options for settings, /cursive help for commands."])
 
 	Cursive._raidOrderDirty = true -- v4.0.4: Force initial BuildRaidOrderLookup
 	Cursive.curses:LoadCurses()
